@@ -1,0 +1,611 @@
+#: import my_utils util
+#: import utils kivy.utils
+#:import Label kivy.uix.label.Label
+#:import Button kivy.uix.button.Button
+
+#:import Factory kivy.factory.Factory
+#:import CircularProfileImage src.circular_profile_image.CircularProfileImage
+#:import ProfileImageCropper src.profile_image_cropper.ProfileImageCropper
+
+
+
+<MyButton@Button>:
+    font_size: '16sp'
+    size_hint_y: None
+    height: dp(48)
+    background_normal: ''
+    background_color: utils.get_color_from_hex('#0077cc')
+
+<SelectedChatItem>:
+    bg_color:(21/255, 23/255, 31/255, 1) if self.selected else app.THEME['bg']
+   
+<UserNameDisplay>:
+    text:self.username_display
+
+<AccountUsernameDisplay>:
+    text:self.username_display
+<GroupMemeberLengthDisplay>:
+    text:self.group_length_display
+
+<RecipientProfile>:
+    source:self.source_display
+<ChatRecycleView>:
+    viewclass: 'SelectedChatItem'
+    bar_width:0
+    SelectableRecycleBoxLayout:
+        spacing:dp(5)
+        default_size_hint:(1, None)
+        default_size:(None, dp(92))
+        size_hint_y:None
+        height:self.minimum_height
+        orientation:'vertical'
+        multiselect: False
+        touch_multiselect: False
+
+<ChatHistoryItem>:
+    md_bg_color:root.chat_item_background_color
+    radius:dp(10)
+    orientation: 'vertical'
+    #to change later
+    size_hint_y: None
+    height: self.ids.msg_label.size[1] + dp(65)
+    padding: dp(10)
+
+    MDBoxLayout:
+        id:inner_box_layout
+        orientation:'vertical'
+        padding: [dp(0), dp(0), dp(0), dp(10)]
+        MDLabel:
+            id:user_label
+            text: root.sender_username
+        MDWidget:
+        MDWidget:
+        MDSeparator: 
+
+
+    MDLabel:
+        id: msg_label
+        text: root.message
+        halign: 'left'
+        valign: 'middle'
+        size_hint_y: None
+        text_size: self.width, None
+        height: self.texture_size[1]
+        markup: True
+    MDLabel:
+        text:root.message_time
+        halign:'right'
+
+
+<ChatHistoryList>:
+    viewclass: 'ChatHistoryItem'
+    RecycleBoxLayout:
+        default_size_hint: 0.8, None
+        default_size: None, dp(72)
+        size_hint_y: None
+        height: self.minimum_height
+        orientation: 'vertical'
+        spacing: dp(10)
+        padding:dp(10)
+
+#-----------------------------------
+
+
+
+
+
+<MainArea>
+    id:mainarea
+
+
+    #Main Area is HORIZONTAl
+    
+    SideBarBoxLayoutOne:
+        #SIDEBAR 1
+        size_hint:(0.50, 1)
+        padding: dp(10)
+        spacing:dp(10)
+        orientation: 'vertical'
+        canvas.before:
+            Color:
+                rgba: app.THEME['divider_color'] # red color
+            Line:
+                width: 2
+                points: (self.right, self.y, self.right, self.top)
+
+        MDBoxLayout:
+            #this box layout represents the UserWidget
+            adaptive_height:True
+            orientation:'horizontal'
+            size_hint_x:1
+            md_bg_color:app.THEME['user_widget_bg']
+            radius:[dp(10)]
+            spacing:dp(10)
+            padding:dp(10)
+            AsyncImage:
+                source:my_utils.get_profile_picture()
+                id:user_display_profile_picture
+                size_hint:(None, 1)
+                width:dp(40)
+                allow_stretch:True
+                keep_ratio:True
+
+
+            AccountUsernameDisplay:
+                id:account_username_display
+                font_size: sp(16)
+            MDIconButton:
+                id:icon_button
+                icon: 'dots-vertical'
+                pos_hint: {'right': 1}
+                on_release:root.menu.open()
+        MDSeparator:
+
+
+        MDTextField:
+            id:search_chat_input
+            size_hint:(1, None)
+            height:dp(30)
+            mode:'fill'
+            line_color_focus:app.THEME['font_colors']['secondary']
+            icon_left:'magnify'
+            hint_text:'Search Chat'
+            on_text:root.search_chat()           
+            text_color: app.THEME['font_colors']['primary']
+            background_normal:''
+
+        BoxLayout:
+            size_hint_y:None
+            height:self.minimum_height
+        MDRaisedButton:
+            text: '+ Start a new chat'
+            font_size:sp(16)
+            md_bg_color: app.THEME['accent_color']
+            elevation: 5
+            size_hint_x: 1
+            # width: self.parent.width * 1 if self.parent.width < dp(800) else dp(400)
+            height: dp(40)
+            bold: True
+            on_release:root.create_new_chat_dialog()
+                      
+
+
+        MDSeparator:
+
+        ChatRecycleView:
+            id:chat_list
+        
+
+    MDBoxLayout:
+        id:sidebar2
+        # this is sidebar 2 this side bar would represent the main chatting page and chat history
+        orientation: 'vertical'
+        md_bg_color:app.THEME['dark_bg']
+
+
+        MDBoxLayout:
+            padding:dp(0)
+            md_bg_color:app.THEME['bg']
+            size_hint_y:0.1
+            RecipientProfile:
+                id:rp
+            MDBoxLayout:
+                # md_bg_color:(1,0,0,1)
+                orientation:'vertical'
+                UserNameDisplay:
+                    id:username_label
+                GroupMemeberLengthDisplay:
+                    id:group_member_length_display
+            Widget:
+            MDIconButton:
+                icon:'dots-vertical'
+                id:icon_button2
+                on_release:root.chat_menu.open()
+
+
+        MDBoxLayout:
+            ChatHistoryList:
+                id:chat_history
+
+
+           
+        MDBoxLayout:
+            adaptive_height:True
+            orientation:'horizontal'
+            spacing:dp(5)
+            md_bg_color:app.THEME['bg']
+            size_hint_y:0.1
+            MDIconButton:
+                icon:'microphone'
+            MDIconButton:
+                icon:'attachment'
+                size_hint_x: 0.1
+            MyTextInput:
+                id:chat_box
+                background_normal:''
+                background_color:app.THEME["bg"]
+                text:"Enter something here"
+                font_size:sp(20)
+                on_text_validate:root.send()
+                multiline: True
+
+            MDIconButton:
+                icon:'send'
+                on_release:root.send()
+    
+
+
+<SettingsScreen>:
+    BoxLayout:
+        orientation:'vertical'
+        MDTopAppBar:
+            title:'Settings'
+            pos_hint: {'top': 1}
+            background_color: app.THEME['dark_bg']
+            left_action_items : [['arrow-left', lambda x: root.go_back()]]
+
+
+        BoxLayout:
+            orientation: 'horizontal'
+            size_hint: 1, 1
+            
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint_x: 0.3
+                padding: dp(16)
+                spacing: dp(16)
+    
+                ScrollView:
+                    MDBoxLayout:
+                        orientation: 'vertical'
+                        size_hint_y: None
+                        height: self.minimum_height
+                        adaptive_width:True
+                        spacing: dp(16)
+                        padding: dp(8)
+                        
+                        Label:
+                            text: 'General'
+                            font_size: '18sp'
+                            bold: True
+                            size_hint_y: None
+                            height: dp(48)
+                        
+                        MDFillRoundFlatIconButton:
+                            text: 'Change Username'
+                            icon:'account'
+                            on_release:root.setEdit('username')
+                            md_bg_color:app.THEME['primary']
+                        
+                        MDFillRoundFlatIconButton:
+                            md_bg_color: app.THEME['primary']
+                            icon:'key'
+                            text:'Change Password'
+                            on_release:root.setEdit('password')
+                            size_hint_x:None
+                        MDFillRoundFlatIconButton:
+                            text:'Change Profile Picture'
+                            md_bg_color:app.THEME['primary']
+                            on_release:root.setEdit("image")
+                            icon:'image-edit'
+                            
+                        Label:
+                            text: 'Appearance'
+                            font_size: '18sp'
+                            bold: True
+                            size_hint_y: None
+                            height: dp(48)
+                            
+                        MyButton:
+                            text: 'Dark Mode'
+                        
+                        MyButton:
+                            text: 'Font Size'
+                            
+            BoxLayout:
+                orientation: 'vertical'
+                size_hint_x: 0.7
+                
+                
+                ScrollView:
+                    BoxLayout:
+                        id:settings_layout
+                        orientation: 'vertical'
+                        # size_hint_y: None
+                        # height: self.minimum_height
+                        padding: dp(16)
+
+
+<SplashScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: "50dp"
+        spacing: "50dp"
+        size: root.size
+        pos: root.pos
+        Label:
+            text:"CHAT VORTEX"
+            font_name: "fonts/Robo.ttf"
+            font_size:dp(50)
+            size_hint_y:0.4
+            halign:"center"
+            allow_stretch: True
+        FloatLayout:
+            Label:
+                text:"Seamless communication through innovation"
+                size_hint: (1,0.8)
+                font_size:dp(20)
+                pos_hint: {"x": 0, "top": 1.5}
+                color:app.THEME['font_colors']['secondary']
+        Image:
+            source:'images/chatlogo.png'
+            size_hint: (1,None)
+            height:dp(200)           
+        MDRaisedButton:
+            on_release:
+                root.manager.transition.direction = 'left'
+                root.manager.current = 'sign-up'
+            text: "Get Started"
+            size_hint: None, None
+            height: "50dp"
+            width: min(root.width * 0.8, dp(500))
+            md_bg_color: app.THEME['accent_color']
+            text_color: app.THEME['font_colors']['primary']
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+<LoginScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: "50dp"
+        spacing: "20dp"
+        size: root.size
+        pos: root.pos
+        Label:
+            text:"CHAT VORTEX"
+            font_name: "fonts/Robo.ttf"
+            font_size:dp(50)
+            size_hint_y:0.4
+            halign:"center"
+            allow_stretch: True
+        MDLabel:
+            id: error_label
+            halign: "center"
+            valign: "middle"
+            theme_text_color: "Error"
+            font_style: "Caption"
+            size_hint_y: None
+            height: self.texture_size[1]
+        MDLabel:
+            text: "Email"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            size_hint_y: None
+            height: "40dp"
+            color: app.THEME["font_colors"]["secondary"]
+
+        MDTextField:
+            id:login_email
+            size_hint_y: None
+            height: "40dp"
+            color_mode: "accent"
+            hint_text: "Enter your email"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+
+        MDLabel:
+            text: "Password"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            size_hint_y: None
+            height: "40dp"
+            color: app.THEME["font_colors"]["secondary"]
+
+        MDTextField:
+            id:login_password
+            size_hint_y: None
+            height: "40dp"
+            color_mode: "accent"
+            hint_text: "Enter your password"
+            password: True
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+
+        MDFillRoundFlatIconButton:
+            icon: "login"
+            text: "Login"
+            size_hint: None, None
+            height: "50dp"
+            width: min(self.parent.width * 0.9, dp(500))
+            md_bg_color: app.THEME['accent_color']
+            text_color: app.THEME['font_colors']['primary']
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            on_release:
+                root.handle_login()
+        MDFlatButton:
+            text:"Don't Have an Account? Sign Up!"
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            theme_text_color: "Custom"
+            text_color: (1,1,1,0.5)
+            on_release:
+                root.manager.transition.direction = 'right'
+                root.manager.current = 'sign-up'
+
+<SignUpScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        size: root.size
+        pos: root.pos
+        Label:
+            text:"CHAT VORTEX"
+            font_name: "fonts/Robo.ttf"
+            font_size:dp(50)
+            size_hint_y:0.4
+            halign:"center"
+            allow_stretch: True
+        MDLabel:
+            id: error_label
+            halign: "center"
+            valign: "middle"
+            theme_text_color: "Error"
+            font_style: "Caption"
+            size_hint_y: None
+            height: self.texture_size[1]
+        MDLabel:
+            text: "Email"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            size_hint_y: None
+            height: "20dp"
+            color: app.THEME["font_colors"]["secondary"]
+
+        MDTextField:
+            id:email
+            size_hint_y: None
+            height: "20dp"
+            color_mode: "accent"
+            hint_text: "Enter your Email"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+
+        MDLabel:
+            text: "Password"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            size_hint_y: None
+            height: "40dp"  
+            color: app.THEME["font_colors"]["secondary"]
+
+        MDTextField:
+            id:password_one
+            size_hint_y: None
+            height: "20dp"
+            color_mode: "accent"
+            hint_text: "Enter your password"
+            password: True
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+        
+
+        MDLabel:
+            text: "Password"
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            size_hint_y: None
+            height: "20dp"  
+            color: app.THEME["font_colors"]["secondary"]
+
+        MDTextField:
+            id:password_two
+            size_hint_y: None
+            height: "40dp"
+            color_mode: "accent"
+            hint_text: "Confirm password"
+            password: True
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+
+
+        MDFillRoundFlatIconButton:
+            icon: "account"
+            text: "Sign Up"
+            size_hint: None, None
+            height: "50dp"
+            width: min(self.parent.width * 0.9, dp(700))
+            md_bg_color: app.THEME['accent_color']
+            text_color: app.THEME['font_colors']['primary']
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            font_name: "fonts/Roboto-Bold.ttf"
+            font_size: "20sp"
+            on_release:
+                root.showDialog()
+        MDFlatButton:
+            text:"Already have an account? Log In!"
+            pos_hint: {'center_x': 0.5, 'center_y': 0.5}
+            theme_text_color: "Custom"
+            text_color: (1,1,1,0.5)
+            on_release:
+                root.manager.transition.direction = 'left'
+                root.manager.current = 'login'
+
+<CreateNewGroupScreen>: 
+    BoxLayout:
+        orientation:'vertical'
+        RelativeLayout:
+            size_hint_y:0.05
+            MDIconButton:
+                icon: 'arrow-left'
+                icon_color: 1,1,1,1
+                pos_hint: {'top': .99, 'x': 0.01}
+                on_release:root.manager.current = 'dashboard'
+            Label:
+                text: 'Select an Image for Group'
+                pos_hint: {'top': 1, 'center_x': .5}
+                bold:True
+                size_hint_y: None
+                font_size:dp(28)
+                font_name:"fonts/Lato-Bold.ttf"
+                height: self.texture_size[1] + dp(20)                  
+        RelativeLayout:
+            # pos_hint:{'center_y':0.5}
+            EditableImageWidget:
+                pos_hint: {'center_x': 0.5, 'top': 0.24}
+        RelativeLayout:
+            MDTextField:
+                id:group_name
+                size_hint_x:None
+                color_mode:'accent'
+                width:min(0.8* self.parent.width, dp(700))
+                pos_hint:{'center_x':0.5}
+                hint_text:'Give a Group Name'
+                mode:'round'
+                max_text_length:15
+        RelativeLayout:
+            MDFlatButton:
+                text:'Select Participants'
+                text_color:(0,0,0)
+                pos_hint:{'center_x':0.5, 'center_y': 0.5 }
+                on_release:root.show_bottom_sheet(root)
+
+<ListItemWithCheckbox>:
+
+    IconLeftWidget:
+        icon: root.icon
+
+    RightCheckbox:
+        on_active: root.on_checkbox_active(self, self.active, root.text)
+
+<ConversationBottomSheetContent>:
+    orientation: "vertical"
+    size_hint_y: None
+    height: "400dp"
+
+    MDTopAppBar:
+        title: ' Participants'
+        pos_hint: {"top": 1}
+        elevation: 4
+
+    MDScrollView:
+        BoxLayout:
+            orientation:'vertical'
+            MDScrollView:
+                MDList:
+                    id:convo_members
+
+            BoxLayout:
+                size_hint_y: None
+                height: dp(56)
+                padding:dp(10)
+                Widget:
+                    size_hint_x:0.5
+
+                MDFloatingActionButton:
+                    icon:'arrow-right'
+                    size_hint_x: None
+                    width: dp(100)
+                    on_press:root.create_group()
+
