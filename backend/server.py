@@ -101,6 +101,14 @@ async def get_user_id( username:str):
         return {'id':user.user_id}
     return {"error":"User not found"}
 
+@app.get('/api/groups/{conversation_id}')
+async def get_group(conversation_id:int):
+    """ Get a JSON group based on the object"""
+    group = models.Group.get_or_none(models.Group.conversation_id == conversation_id)
+    if group:
+        return {'group_name':group.group_name, 'group_id':group.group_id, 'conversation_id':group.conversation_id, 'admin':group.admin, 'members_length':group.members_length}
+    return {"error":"no group with the given conversation"}
+
 
 @app.put("/api/users/{user_id}/update_username")
 async def update_username(
@@ -129,7 +137,7 @@ async def update_password(
     token = await services.get_token_http(request)
     user = await services.get_current_user(token)
     if user.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this user's password")
+        raise _fastapi.HTTPException(status_code=403, detail="Not authorized to update this user's password")
     operation_update = await services.update_password(password_data.user_id, password_data.password)
     if operation_update:
         return {"Info":"Update done"}
@@ -150,6 +158,34 @@ async def update_profile_picture(user_id:int, request:Request, file: UploadFile 
 
     # Return a JSON response with the updated profile picture
     return JSONResponse({"profile_picture": image_base64})
+
+
+
+@app.delete("/groups/{group_id}/leave/{user_id}")
+async def leave_group(group_id: int, user_id: int, request:Request, token:str=Depends(services.authenticate_token)):
+    """Given the group_idm and user_id, this would do the operations for leaving group"""
+    leave_group_status = await services.leave_group(group_id, user_id)
+    if leave_group_status[0]:
+        
+        return {"message": "Successfully left the group."}
+    if leave_group_status[1] == "User is not a member of the group":
+        raise _fastapi.HTTPException(status_code=404, detail="User is not a member of the group.")
+    if leave_group_status[1] == "Group or User does not exist":
+        raise _fastapi.HTTPException(status_code=404, detail="Group or user not found.")
+    if leave_group_status[1] == "owner":
+         raise _fastapi.HTTPException(status_code=404, detail="Owner cannot leave group only delete.")
+
+
+
+@app.post("/groups/add_members")
+async def add_members(request:schemas.AddMemberRequest, token:str=Depends(services.authenticate_token)):
+    add_members_to_group_process = await services.add_members_to_group(request)
+    if add_members_to_group_process.get("error") is None:
+        return add_members_to_group_process
+    raise _fastapi.HTTPException(status_code=404, detail=add_members_to_group_process.get("error"))
+
+
+
 
 
 # this endpoint is responsible for starting a communication between. hen user presses on new chat a convsersation is started

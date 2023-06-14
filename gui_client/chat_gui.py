@@ -2,7 +2,7 @@ import kivy
 from kivy.utils import get_color_from_hex
 from kivy.uix.screenmanager import *
 from kivymd.uix.textfield import MDTextField
-from util import get_user_details,get_user_token, get_user_details_from_cache, logout, validate_username_id_string,get_userid, convert_string_to_date, get_profile_picture,decode_base64,get_kivy_chat_account_image_texture, get_kivy_image_from_bytes_texture,download_image
+from util import get_user_details,get_user_token, get_user_details_from_cache, logout, validate_username_id_string,get_userid, convert_string_to_date, get_profile_picture,decode_base64,get_kivy_chat_account_image_texture, get_kivy_image_from_bytes_texture,download_image, leave_group,add_members
 from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.list import ThreeLineAvatarIconListItem, OneLineAvatarIconListItem, TwoLineAvatarListItem, OneLineListItem
 from kivy.metrics import dp
@@ -35,7 +35,7 @@ from kivymd.uix.filemanager import MDFileManager
 from kivy.uix.image import CoreImage
 from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Color, Ellipse
-
+from customwidgets import GroupLayout, ParticipantChooseLayout, ListItemWithCheckbox
 
 
 class CustomImageLeftWidget(AsyncImage):
@@ -234,11 +234,9 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
 
             if app.chat_state['is_group']:
                 MainArea.group_memebers_object.update_group_members_length_display(f"{app.group_length[rv.convos[index]]} members")
-                MainArea.update_view_profile_text("View Group")
                 asyncio.create_task(client.handle_group_history_connect(app.chat_state['conversation_id']))
             else:
                 activity_text = "online" if app.recipient_is_active[app.chat_state['recipient_id']] else "offline"
-                MainArea.update_view_profile_text("View Profile")
                 MainArea.group_memebers_object.update_group_members_length_display(f"{activity_text}")
 
 
@@ -259,6 +257,7 @@ class ChatRecycleView(MDRecycleView):
         self.in_memory_data = [] # holds memory of data before in search mode
         self.search_data = []
         self.groups = []
+        self.groups_id  = {}
         self.bind(data=self.on_data_change)
 
     def set_data(self):
@@ -286,6 +285,7 @@ class ChatRecycleView(MDRecycleView):
 class SideBarBoxLayoutOne(BoxLayout):
     pass
 
+
 class MainArea(BoxLayout):
     create_chat_dialog = None
     SIDEBAR_2 = None
@@ -294,8 +294,12 @@ class MainArea(BoxLayout):
     group_member_length_display  = None
     username_label = None
     view_profile_text = StringProperty('View Profile')
+    leave_group_text = StringProperty("Leave Group")
     def __init__(self, sm, **kwargs):
         self.sm = sm 
+        self.coversation_group_menu  = None
+        self.leave_group_confirmation_menu = None
+        self.add_members_dialog = None
         super().__init__(**kwargs)
         menu_items = [
             {"text":'Logout', 'viewclass':"OneLineListItem", "on_release":self.logout},
@@ -305,8 +309,13 @@ class MainArea(BoxLayout):
 
         chat_menu_items = [
             {"text":'block', 'viewclass':"OneLineListItem",'on_release':lambda :print('hw')},
-            {"text":'View Profile', 'viewclass': 'OneLineListItem', 'on_release':lambda :print(App.get_running_app().chat_state)}
+        ]
 
+        group_chat_menu_items = [
+          {"text":'block', 'viewclass':"OneLineListItem",'on_release':lambda :print('hw')},
+            {"text":'View Group', 'viewclass': 'OneLineListItem', 'on_release':self.show_view_conversation},
+            {'text':"Leave Group", 'viewclass':'OneLineListItem', "on_release":self.show_leave_group_dialog},
+            {'text':"Add Members ", 'viewclass':"OneLineListItem", "on_release":self.show_add_member_dialog}
         ]
         self.menu = MDDropdownMenu(
             items=menu_items,
@@ -320,10 +329,90 @@ class MainArea(BoxLayout):
                 width_mult=2,
                 pos_hint={"center_x": 0.5, "center_y": 0.5}
         )
+        MainArea.group_menu = MDDropdownMenu(
+                items=group_chat_menu_items,
+                caller=self.ids.icon_button2,
+                width_mult=2,
+                pos_hint={"center_x": 0.5, "center_y": 0.5}
+        )
 
-    @classmethod
-    def update_view_profile_text(cls, value):
-        cls.chat_menu.items[1]["text"] = value
+
+    def menu_open(self, is_group):
+        if is_group:
+            MainArea.group_menu.open()
+            return
+        MainArea.chat_menu.open()
+
+    def show_leave_group_dialog(self):
+        if not self.leave_group_confirmation_menu:
+            self.leave_group_confirmation_menu = MDDialog(
+                    text="Are you sure you want to leave this group?",
+                    type="custom",
+                    buttons=[
+                        MDFlatButton(text="Cancel", on_release=lambda dialog: self.leave_group_confirmation_menu.dismiss()), MDFlatButton(text="Leave", text_color=(1,0,0,1), md_bg_color=(1, 0, 0, 1),font_size="15sp", on_release=self.leave_group_dialog)
+                    ]
+                )
+
+        self.leave_group_confirmation_menu.open()
+
+    def show_add_member_dialog(self):
+        if not self.add_members_dialog:
+            self.add_members_dialog = MDDialog(title="Choose participants below",type="custom",content_cls=ParticipantChooseLayout(size_hint_y=None, height="300dp", spacing="4dp"), buttons=[MDFlatButton(text="Cancel", on_release=lambda dialog:self.add_members_dialog.dismiss()), MDFlatButton(text="Add", on_release=self.on_add_member)])
+        self.add_members_dialog.open()
+
+    def on_add_member(self, instance):
+        new_users_ids = [get_userid(name).get('id') for name in ListItemWithCheckbox.checked_options ]
+        rv = self.ids.chat_list
+        group_id = rv.groups_id[App.get_running_app().chat_state['conversation_id']]
+        print(type(group_id), group_id)
+        for new_user_id in new_users_ids:
+            print(new_user_id, 66)
+            add_members_process = add_members( group_id, new_user_id)
+            if add_members_process.get("detail"):
+                Snackbar(text=f"{add_members_process['detail']}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#ff0000")).open()
+                return
+        Snackbar(text=f"{add_members_process['message']}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
+
+        self.add_members_dialog.dismiss()
+
+    def leave_group_dialog(self, instance):
+        conversation_id = App.get_running_app().chat_state['conversation_id']
+        rv = self.ids.chat_list
+        group_id = rv.groups_id[conversation_id]
+        leave_group_process = leave_group(group_id)
+        if leave_group_process == True:
+            self.leave_group_confirmation_menu.dismiss()
+            self.remove_widget(MainArea.SIDEBAR_2)
+            self.add_widget(MDLabel(text="Select a Chat to start Chatting"))
+            Snackbar(text="Successfully left the group",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
+            SelectedChatItem.clicked = False
+        else:
+             Snackbar(text=f"{leave_group_process}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
+
+
+
+    def show_view_conversation(self):
+        app = App.get_running_app()
+        if app.chat_state["is_group"]:
+            self.coversation_group_menu =  MDDialog(
+                title="Group Info",
+                type="custom",
+                # background_color=app.THEME['bg'], # set background color here
+                content_cls=GroupLayout(conversation_id=app.chat_state["conversation_id"],size_hint_y=None, height="300dp", spacing="4dp"),
+                buttons=[
+                    MDFlatButton(
+                        text="Go Back",
+                        # text_color=App.get_running_app().THEME['accent_color'],
+                        font_name="fonts/Roboto-Bold.ttf",
+                        font_size="15sp",
+                        on_release=lambda dialog:self.coversation_group_menu.dismiss()
+                    ),
+                ],
+
+                )
+
+            self.coversation_group_menu.open()
+            return
 
 
     def on_kv_post(self, base_widget):

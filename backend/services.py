@@ -340,6 +340,67 @@ async def get_chat_history(conversation_id:int, onInitial=None, group=False):
         return {"action":"update_chat_history", "data":list(messages)}
 
 
+async def leave_group(group_id:int, user_id):
+    try:
+        group = models.Group.get_or_none(Group.group_id == group_id)
+        user = models.User.get_or_none(User.user_id == user_id)
+
+        if group.admin_id == user.user_id:
+            return (False,"owner")
+        
+        # Check if the user is a member of the group
+        if models.ConversationParticipant.select().where(
+            models.ConversationParticipant.conversation_id == group.conversation_id,
+            models.ConversationParticipant.participant_id == user_id
+        ).exists():
+            # Remove the user from the group
+            models.ConversationParticipant.delete().where(
+                models.ConversationParticipant.conversation_id == group.conversation_id,
+                models.ConversationParticipant.participant_id == user_id
+            ).execute()
+            #Update the length
+            group.members_length = group.members_length - 1
+            group.save()
+            return (True, "success")
+        else:
+            return (False, "User is not a member of the group.")
+    except DoesNotExist:
+        return (False, "Group or User does not exist") 
+
+async def add_members_to_group(request):
+    try:
+        #Getting the group
+        group = models.Group.get_or_none(models.Group.group_id == request.group_id)
+        #getting the new member user
+        new_member_user = models.User.get_or_none(models.User.user_id == request.new_user_id)
+
+        
+        # Check if the user is already a member of the group
+        if models.ConversationParticipant.select().where(
+            models.ConversationParticipant.conversation_id == group.conversation_id,
+            models.ConversationParticipant.participant_id == new_member_user.user_id
+        ).exists():
+            return {'error':'User already a member of the group'}
+
+        # Add the ConversationParticipant record
+        models.ConversationParticipant.create(
+            conversation_id=group.conversation_id,
+            participant_id=new_member_user.user_id
+        )
+
+        #increase the group_length
+        group.members_length = group.members_length + 1
+        group.save()
+
+        return {"message": "Member added successfully"}
+
+    except models.Group.DoesNotExist:
+        return {"error":'group not found'}
+        # raise HTTPException(status_code=404, detail="Group not found")
+
+    except models.User.DoesNotExist:
+        return {'error': 'user not found'}
+        # raise HTTPException(status_code=404, detail="User not found")
 
 
 accepted_arguments_mapping = {

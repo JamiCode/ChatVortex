@@ -82,3 +82,11 @@ class ConversationPayload(pydantic.BaseModel):
 class ChatHistoryRequest(pydantic.BaseModel):
     conversation_id:int
 
+
+
+class AddMemberRequest(pydantic.BaseModel):
+    group_id: int
+    new_user_id: int
+
+
+    

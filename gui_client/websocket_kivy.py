@@ -185,6 +185,7 @@ class WebSocketClient(EventDispatcher):
 				convo_prop = {'text': f"Group:{convo['group_name']}", 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0}
 				rv.groups.append(True)
 				rv.data.append(convo_prop)
+				rv.groups_id[convo["conversation_id"]] = convo["group_id"]
 				app.group_length[convo["conversation_id"]] = convo["group_length"]
 			else:
 				convo_prop = {'text': convo['other_participant']['username'], 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0, "profile_picture":convo["profile_picture"]}
@@ -213,6 +214,7 @@ class WebSocketClient(EventDispatcher):
 				convo_prop = {'text': f"Group:{convo['group_name']}", 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0}
 				rv.data.append(convo_prop)
 				rv.groups.append(True)
+				rv.groups_id[convo["conversation_id"]] = convo["group_id"]	
 				app.group_length[convo["conversation_id"]] = convo["group_length"]
 			else:
 				convo_prop = {'text': convo['other_participant']['username'], 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0}

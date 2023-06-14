@@ -200,7 +200,7 @@
             MDIconButton:
                 icon:'dots-vertical'
                 id:icon_button2
-                on_release:root.chat_menu.open()
+                on_release:root.menu_open(app.chat_state["is_group"])
 
 
         MDBoxLayout:

@@ -229,6 +229,36 @@ def get_userid(username:str):
     response = httpx.get(back_endpoint)
     return response.json()
 
+def get_group(conversation_id:int):
+     back_endpoint = f"http://{HOST}:8000/api/groups/{conversation_id}"
+     response = httpx.get(back_endpoint)
+     return response.json()
+
+
+def leave_group(group_id:int):
+    user_id = get_user_details_from_cache()["user_id"]
+    token = get_user_token()
+    backend_endpoint = f"http://{HOST}:8000/groups/{group_id}/leave/{user_id}"
+    headers = {"Authorization":f"Bearer {token}"}
+    response = httpx.delete(backend_endpoint, headers=headers)
+    if not response.status_code == 200:
+        # if the status code is not ok, something is wrong with the request
+        return response.json()["detail"]
+    return True
+
+def add_members(group_id, new_user_id):
+    user_id = get_user_details_from_cache()['user_id']
+    token = get_user_token()
+    endpoint = f"http://{HOST}:8000/groups/add_members"
+    headers = {"Content-Type": "application/json", "Authorization":f"Bearer {token}"}
+    request_body = {"group_id":group_id, "new_user_id":new_user_id}
+    response = httpx.post(endpoint, json=request_body, headers=headers)
+    if not response.status_code == 200:
+        #something is wrong with the requests
+       return response.json()
+    return response.json()
+
+
 
 def update_cache(username:str=None, email:str=None):
   form  =   {"username":username, "image":None,"email":email}
