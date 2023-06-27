@@ -212,7 +212,7 @@ async def create_convo(websocket:WebSocket, token:str = Depends(services.get_tok
         #check this code out later
         if not conversation or conversation.conversation_type == "Group":
             #if the conversation does not exist create, the conversation and send the url
-            conversation = models.Conversation.create(conversation_type="DM", last_message_sent=datetime.now())
+            conversation = models.Conversation.create(conversation_type="DM", last_message_sent=datetime.utcnow())
             #Update the db ConverSationParticiPant
             models.ConversationParticipant.create(conversation_id=conversation.conversation_id, participant_id=sender.user_id )
             models.ConversationParticipant.create(conversation_id=conversation.conversation_id, participant_id=recipient.user_id)
@@ -221,7 +221,7 @@ async def create_convo(websocket:WebSocket, token:str = Depends(services.get_tok
             response = {"type":'redirect', "info":"new conversation created", "redirect_url":f"ws://{HOST}:{PORT}/socket/convo/{conversation.conversation_id}"}
             await websocket.send_json(response)
         else:
-            
+            z
             #if the conversation exists
             response = {"type":'redirect', "info":"Conversation already exists between you and the user", "convo_url":f"ws://{HOST}:{PORT}/socket/convo/{conversation.conversation_id}"}
             await websocket.send_json(response)
@@ -260,7 +260,7 @@ async def create_group(websocket:WebSocket, token:str = Depends(services.get_tok
 
         #Of Course every group is a conversation so lets create the conversation. so start with the conversation
 
-        conversation = models.Conversation.create(conversation_type="Group",last_message_sent=datetime.now())
+        conversation = models.Conversation.create(conversation_type="Group",last_message_sent=datetime.utcnow())
 
         models.ConversationParticipant.create(conversation_id=conversation.conversation_id, participant_id=initiator_id)
         #now we create the participants to each conversations
@@ -309,13 +309,16 @@ async def send_recieve_message_in_conversation(conversation_id:int, websocket:We
                 #check if sendr or user not in this conversation
                 await websocket.send_json({"error":'sender or recipient not found in the conversation'})
             else:
+                current_date = datetime.utcnow()
                 message = models.Message.create(
                 conversation_id=conversation.conversation_id,
                 sender_id=sender.user_id,
                 recipient_id=recipient.user_id,
                 message_text=payload.message_text,
-                timestamp=datetime.now()
+                timestamp=current_date
                 )
+                conversation.last_message_sent = current_date
+                conversation.save()
                 message_form = {
                 "sender_id":sender.user_id,
                 "recipient_id":recipient.user_id,
@@ -342,6 +345,7 @@ async def send_recieve_message_in_conversation(conversation_id:int, websocket:We
         raise WebSocketException(code=_fastapi.status.WS_1008_POLICY_VIOLATION, reason="There is  missing field")
 
 # this endpoint is responsible for sending and recieving messages from the same convesrsaion group
+#Group_id here really refers to the conversation_id
 @app.websocket("/socket/group_convo/{group_id}")
 async def send_recieve_message_in_group(group_id:int, websocket:WebSocket, token:str = Depends(services.get_token)):
     user = await services.verify_socket_connection(token)
@@ -349,9 +353,17 @@ async def send_recieve_message_in_group(group_id:int, websocket:WebSocket, token
     try:
         await websocket.accept()
         #just keeep in mind that would just simly store in the database, does not do broadcasting this is the job of the frontend
-        data = await websocket.receive_json()
-        payload = schemas.GroupSendPayload(**data)
-        message = models.GroupMessage.create(group_conversation_id=group_id, sender_id=payload.sender_id, message_text=payload.message_text, timestamp=datetime.utcnow())
+        conversation = models.Conversation.get_or_none(models.Conversation.conversation_id == group_id)
+        if conversation and conversation.conversation_type == "Group":
+            group = conversation.group
+            current_date = datetime.utcnow() 
+            data = await websocket.receive_json()
+            payload = schemas.GroupSendPayload(**data)
+            message = models.GroupMessage.create(group_conversation_id=group_id, sender_id=payload.sender_id, message_text=payload.message_text, timestamp=current_date)
+            conversation.last_message_sent = current_date
+            conversation.save()
+        else:
+            await websocket.send_json({"error":"Group does not exist"})
     except WebSocketDisconnect:
        print("Something happened with client wifi")
     except json.decoder.JSONDecodeError:

@@ -31,7 +31,7 @@ class User(peewee.Model):
 class Conversation(peewee.Model):
     conversation_id = peewee.PrimaryKeyField()
     conversation_type = peewee.CharField(choices=[('DM', 'Direct Message'), ('Group', 'Group')], max_length=10)
-    last_message_sent = peewee.DateTimeField(default=datetime.datetime.now)
+    last_message_sent = peewee.DateTimeField(default=datetime.datetime.utcnow())
 
 
     class Meta:
@@ -57,7 +57,7 @@ class Message(peewee.Model):
     recipient_id = peewee.ForeignKeyField(User) # Keep track who recieved it   
     message_text = peewee.CharField(max_length=255)
     voice_message = peewee.BlobField(null=True)
-    timestamp = peewee.DateTimeField()
+    timestamp = peewee.DateTimeField(default=datetime.datetime.utcnow)
     is_read  = peewee.BooleanField(default=False)
 
     class Meta:

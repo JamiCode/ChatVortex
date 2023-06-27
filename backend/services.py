@@ -284,7 +284,7 @@ async def get_conversations(user_id):
                 (models.ConversationParticipant.conversation_id == conversation.conversation_id) &
                 (models.User.user_id != user_id)
             ).get()
-            last_message_time = conversation.last_message_sent.strftime('%Y-%m-%d %H:%M:%S') if conversation.last_message_sent else None
+            last_message_time = conversation.last_message_sent.strftime('%Y-%m-%d %H:%M:%S')
             last_message = await get_recent_chat_list_dm(conversation.conversation_id)
             conversation_data = {
                 "conversation_id":conversation.conversation_id,
@@ -300,7 +300,11 @@ async def get_conversations(user_id):
 
             }
             conversations.append(conversation_data)
-    return conversations
+   
+
+    #this code sorts the conversation based on recent activity
+    sorted_conversations = sorted(conversations, key=lambda x: x['last_message_sent_time'], reverse=True)
+    return sorted_conversations
 
 
 
