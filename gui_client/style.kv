@@ -167,7 +167,6 @@
             height: dp(40)
             bold: True
             on_release:root.create_new_chat_dialog()
-                      
 
 
         MDSeparator:
@@ -283,12 +282,6 @@
                             text:'Change Password'
                             on_release:root.setEdit('password')
                             size_hint_x:None
-                        MDFillRoundFlatIconButton:
-                            text:'Change Profile Picture'
-                            md_bg_color:app.THEME['primary']
-                            on_release:root.setEdit("image")
-                            icon:'image-edit'
-                            
                         Label:
                             text: 'Appearance'
                             font_size: '18sp'

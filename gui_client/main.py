@@ -43,7 +43,7 @@ from kivy.uix.button import Button
 from kivy.uix.image import AsyncImage
 from kivymd.uix.filemanager import MDFileManager
 from src.profile_image_cropper import CircularProfileImageCropper
-from websocket_kivy import WebSocketClient
+from websocket_kivy import WebSocketClient, handle_close_websocket_connections
 import time
 import threading
 import setproctitle
@@ -148,14 +148,6 @@ class UserNameSettingsLabel(Label):
         self.size_hint_y = None
         self.height = dp(48)
 
-class ChangeImageLabel(Label):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.text = "Change Profile Picture"
-        self.font_size = "24sp"
-        self.bold = True
-        self.size_hint_y = None
-        self.height = dp(48)
 
 class CreateNewGroupScreen(Screen):
     def callback_for_menu_items(self, *args):
@@ -220,13 +212,7 @@ class SettingsScreen(Screen):
                 asyncio.create_task(handle_close_websocket_connections())
                 app.state["on_first_boot"] = False
                 self.sm.current = 'splash'
-            elif self.setting == "image":
-                print("Hello")
 
-                # updatepfp = update_profile_picture(self.user_image.source)
-                # if not updatepfp:
-                #     Snackbar(text="Updating Profile Picture Failed try again",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#ff0000")).open()
-                # Snackbar(text="Profile Picture Successfully Updated",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#00ff00")).open()
 
 
     def on_choose_image(self, instance):
@@ -252,7 +238,7 @@ class SettingsScreen(Screen):
     def go_back(self):
         self.sm.current = "dashboard"
     def setEdit(self, type_):
-        possible_types = ['username', 'image', 'password']
+        possible_types = ['username', 'password']
         if type_ in possible_types:
             if type_ == possible_types[0]:
                 self.setting = "username"
@@ -276,22 +262,6 @@ class SettingsScreen(Screen):
                 else:
                     self.ids.settings_layout.add_widget(ChangePasswordLabel())
                     self.ids.settings_layout.add_widget(PasswordTextInput())
-                    self.ids.settings_layout.add_widget(self.relative_layout)
-            elif type_ == possible_types[1]:
-                self.setting = "image"
-                if len(self.ids.settings_layout.children) > 0:
-                    self.ids.settings_layout.clear_widgets()
-                    self.ids.settings_layout.add_widget(ChangeImageLabel())
-                    self.ids.settings_layout.add_widget(
-                        self.image_widget
-                        )
-                    self.ids.settings_layout.add_widget(self.relative_layout)
-                   
-                else:
-                    self.ids.settings_layout.add_widget(ChangeImageLabel())
-                    self.ids.settings_layout.add_widget(
-                        self.image_widget
-                        )
                     self.ids.settings_layout.add_widget(self.relative_layout)
 
 

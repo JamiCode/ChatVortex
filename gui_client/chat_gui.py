@@ -31,6 +31,7 @@ import random
 import asyncio
 import json
 import threading
+import time
 from kivymd.uix.filemanager import MDFileManager
 from kivy.uix.image import CoreImage
 from kivy.uix.floatlayout import FloatLayout
@@ -511,6 +512,8 @@ class MainArea(BoxLayout):
 
                 )
         self.create_chat_dialog.open()
+
+        
     def create_chat(self):
         sender_id=App.get_running_app().chat_state['sender_id']
         recipient_text=self.create_chat_dialog.content_cls.text

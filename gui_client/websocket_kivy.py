@@ -126,22 +126,25 @@ class WebSocketClient(EventDispatcher):
 			pass
 		except websockets.exceptions.ConnectionClosedError:
 			print("[INFO]: Group History Connection closed by Server abruptly")
-		except websockets.exceptions.ConnectionClosedOK:
-			print("[INFO] Group History Connection closed by server properly")
-			pass
 		finally:
 			if  WebSocketClient.chat_history_connect_obj is not None:
 				await WebSocketClient.chat_history_connect_obj.close()
 
 	async def handle_send_functionality(self,**kwargs):
 		"""This method simply connects to the websocket server only to send message to the server, the closing of the websocket server is handled by the server. The Server would end the connection"""
-		message_form = {**kwargs}
-		conversation_id = kwargs['conversation_id']
-		websocket  = await websockets.connect(
-				f"ws://{HOST}:8000/socket/convo/{conversation_id}",
-				extra_headers={"Authorization":f"Bearer {self.token}"}
-				)
-		await websocket.send(json.dumps(message_form))
+		try:
+			message_form = {**kwargs}
+			conversation_id = kwargs['conversation_id']
+			websocket  = await websockets.connect(
+					f"ws://{HOST}:8000/socket/convo/{conversation_id}",
+					extra_headers={"Authorization":f"Bearer {self.token}"}
+					)
+			await websocket.send(json.dumps(message_form))
+		except websockets.exceptions.ConnectionClosedError:
+			"""Any abruptly closure from the server side """
+			print("[INFO] convos Websocket was closed abruptly by the server")
+		except asyncio.exceptions.CancelledError:
+			pass
 
 	async def handle_send_functionality_group(self,**kwargs):
 		message_form = {**kwargs}
@@ -151,7 +154,6 @@ class WebSocketClient(EventDispatcher):
 			extra_headers={"Authorization":f"Bearer {self.token}"}
 			) as websocket:
 			await websocket.send(json.dumps(message_form))
-
 	async def handle_create_chat_functionality(self, create_chat_dialog,**kwargs,):
 		"""Return true if the creation was successuly"""
 		message_form = {**kwargs}
@@ -178,6 +180,7 @@ class WebSocketClient(EventDispatcher):
 		rv.recipientsget_last_message_from_backend= []
 		rv.groups=[]
 		app = App.get_running_app()
+		print(self.initial_conversations)
 
 		for convo in self.initial_conversations:
 
@@ -202,7 +205,6 @@ class WebSocketClient(EventDispatcher):
 
 
 		rv = self.main_area_layout.ids.chat_list
-		# rv.data = [{'text': convo['other_participant']['username'], 'secondary_text':'placeholder','ripple_scale': 0} if convo['conversation_type'] != "Group" else {'text': convo['participants']['username'], 'secondary_text':'placeholder','ripple_scale': 0} for convo in self.initial_conversations]
 
 		rv.data = []
 		rv.recipients= []
