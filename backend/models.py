@@ -15,6 +15,8 @@ class User(peewee.Model):
     is_admin = peewee.BooleanField(default=False)
     date_created = peewee.DateTimeField(default=datetime.datetime.now)
     profile_picture = peewee.BlobField(null=True)
+    last_seen = peewee.DateTimeField(null=False) 
+
     class Meta:
         database = db
 
@@ -25,6 +27,28 @@ class User(peewee.Model):
     def verify_password(self, password:str):
         return _hash.bcrypt.verify(password, self.hashed_password)
 
+    def get_last_seen(self):
+        now = datetime.datetime.utcnow()
+        time_diff = now - self.last_seen
+        # Calculate the time difference in minutes
+        minutes = int(time_diff.total_seconds() / 60)
+
+        if not self.is_active:  
+            if minutes < 1:
+                return "now"
+            elif minutes == 1:
+                return "1 min ago"
+            elif minutes < 60:
+                return f"{minutes} mins ago"
+            elif minutes < 1440:  # 24 hours
+                hours = int(minutes / 60)
+                return f"{hours} hours ago"
+            else:
+                days = int(minutes / 1440)
+                return f"{days} days ago"
+        return 'online'
+
+
 
 
 # Define the Conversation model
@@ -32,7 +56,8 @@ class Conversation(peewee.Model):
     conversation_id = peewee.PrimaryKeyField()
     conversation_type = peewee.CharField(choices=[('DM', 'Direct Message'), ('Group', 'Group')], max_length=10)
     last_message_sent = peewee.DateTimeField(default=datetime.datetime.utcnow())
-
+    is_blocked  = peewee.BooleanField(default=False)
+    blocked_user_id = peewee.IntegerField(null=True)
 
     class Meta:
         database = db
@@ -85,6 +110,9 @@ class Group(peewee.Model):
 
     class Meta:
         database = db
+
+
+#Model defined to know blocked relationship
 
 
  

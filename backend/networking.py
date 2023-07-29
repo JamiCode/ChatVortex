@@ -1,5 +1,6 @@
 from typing import List, Dict
 from fastapi import WebSocket
+from datetime import datetime
 import schemas
 import models
 import json
@@ -35,6 +36,8 @@ class ClientConnectionManager:
             await websocket.accept()
 
     def disconnect(self, user_id: int):
+        current_timestamp = datetime.utcnow()
+        models.User.update(last_seen=current_timestamp).where(models.User.user_id == user_id).execute()
         models.User.update(is_active=False).where(models.User.user_id == user_id).execute()
         if self.active_connections.get(user_id):
             del self.active_connections[user_id]

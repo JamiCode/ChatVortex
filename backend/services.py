@@ -18,6 +18,7 @@ import peewee
 import json
 import base64
 from datetime import datetime
+from peewee import JOIN
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -79,7 +80,7 @@ async def create_user(user:_schemas.UserCreate):
     #if everything is working fine create the user in the database,
     password_hashed = _hash.bcrypt.hash(user.password)
 
-    user_obj = User.create(email=user.email, username=user.username, hashed_password=password_hashed, is_active=True, is_admin=False)
+    user_obj = User.create(email=user.email, username=user.username, hashed_password=password_hashed, is_active=True, is_admin=False, last_seen=datetime.utcnow())
     return user_obj
      
 
@@ -229,17 +230,20 @@ async def check_for_conversation(sender_id, recipient_id):
     return conversation
 
 async def get_recent_chat_list_dm(conversation_id):
-  conversation_obj = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id) 
-  if conversation_obj is None or not len(conversation_obj.messages) > 0:
-    return None
-  return conversation_obj.messages[-1].message_text
+    conversation_obj = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id) 
+    if conversation_obj is None or not len(conversation_obj.messages) > 0:
+        return None
+    sender = conversation_obj.messages[-1].sender_id
+    return {"message":conversation_obj.messages[-1].message_text, "sender": sender.user_id}
+
 
 
 async def get_recent_chat_list_group(conversation_id):
-  conversation_obj = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id) 
-  if conversation_obj is None or not len(conversation_obj.group_messages) > 0 :
-    return None
-  return conversation_obj.group_messages[-1].message_text
+    conversation_obj = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id) 
+    if conversation_obj is None or not len(conversation_obj.group_messages) > 0 :
+        return None
+    sender = conversation_obj.group_messages[-1].sender_id
+    return {"message":conversation_obj.group_messages[-1].message_text, "sender": sender.user_id}
 
 
    
@@ -271,7 +275,8 @@ async def get_conversations(user_id):
                 "conversation_id":conversation.conversation_id,
                 "conversation_type":conversation.conversation_type,
                 "last_message_sent_time":last_message_time,
-                "last_message_sent":last_message_sent,
+                "last_message_sent":last_message_sent["message"] if last_message_sent else "No Chat",
+                "last_message_sender":str(last_message_sent["sender"])if last_message_sent else "",
                 "participants": participant_data,
                 "group_name":group.group_name,
                 "group_id":group.group_id,
@@ -290,11 +295,15 @@ async def get_conversations(user_id):
                 "conversation_id":conversation.conversation_id,
                 "conversation_type":conversation.conversation_type,
                 "last_message_sent_time":last_message_time,
-                "last_message_sent":last_message,
+                "last_message_sent":last_message["message"] if last_message else "None",
+                "last_message_sender":str(last_message["sender"]) if last_message else "",
+
                 "other_participant": {
                     "user_id": other_participant.user_id,
                     "username": other_participant.username,
-                    "activity":other_participant.is_active
+                    "activity":other_participant.is_active,
+                    "date-joined":other_participant.date_created.strftime("%m/%d/%Y"),
+                    "last_seen":other_participant.get_last_seen(),
                 },
                 'profile_picture' :base64.b64encode(other_participant.profile_picture).decode() if other_participant.profile_picture else None
 
@@ -303,8 +312,7 @@ async def get_conversations(user_id):
    
 
     #this code sorts the conversation based on recent activity
-    sorted_conversations = sorted(conversations, key=lambda x: x['last_message_sent_time'], reverse=True)
-    return sorted_conversations
+    return conversations
 
 
 
@@ -405,6 +413,38 @@ async def add_members_to_group(request):
     except models.User.DoesNotExist:
         return {'error': 'user not found'}
         # raise HTTPException(status_code=404, detail="User not found")
+
+
+
+
+
+async def get_group_members(group_id):
+    try:
+        # Retrieve the group based on the group_id
+        group = Group.get(Group.group_id == group_id)
+
+        # Retrieve the conversation associated with the group
+        conversation = Conversation.get(Conversation.conversation_id == group.conversation_id)
+
+        # Query all the participants of the conversation (members of the group)
+        members = (User
+                   .select()
+                   .join(ConversationParticipant, on=(User.user_id == ConversationParticipant.participant_id))
+                   .where(ConversationParticipant.conversation_id == conversation.conversation_id))
+        print(members)
+        return list(members)
+
+    except Group.DoesNotExist:
+        print(f"Group with ID {group_id} does not exist.")
+        return []
+
+    except Conversation.DoesNotExist:
+        print(f"Conversation with ID {group.conversation_id} does not exist.")
+        return []
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return []
 
 
 accepted_arguments_mapping = {

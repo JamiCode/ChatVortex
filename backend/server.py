@@ -93,6 +93,8 @@ async def get_profile_picture(user_id:int, request:Request, token:schemas.User=D
 
     return JSONResponse({"profile_picture":user_profile_picture})
 
+
+
 #This View converts username to user_id
 @app.get('/api/user_id/{username}')
 async def get_user_id( username:str):
@@ -101,21 +103,47 @@ async def get_user_id( username:str):
         return {'id':user.user_id}
     return {"error":"User not found"}
 
+#This View converts the userid to username
+@app.get('/api/username/{user_id}')
+async def get_username(user_id:int):
+    user = models.User.get_or_none(models.User.user_id == user_id)
+    if user:
+        return {'username':user.username}
+    return {'error':"User not found"}
+
 @app.get('/api/groups/{conversation_id}')
 async def get_group(conversation_id:int):
     """ Get a JSON group based on the object"""
     group = models.Group.get_or_none(models.Group.conversation_id == conversation_id)
     if group:
-        return {'group_name':group.group_name, 'group_id':group.group_id, 'conversation_id':group.conversation_id, 'admin':group.admin, 'members_length':group.members_length}
+        group_members = await services.get_group_members(group.group_id)
+        return {'group_name':group.group_name, 'group_id':group.group_id, 'conversation_id':group.conversation_id, 'admin':group.admin, 'members_length':group.members_length, 'members':group_members}
     return {"error":"no group with the given conversation"}
+
+@app.get("/api/is_blocked/{conversation_id}")
+async def is_blocked(conversation_id, user:schemas.User=Depends(services.get_current_user)):
+    conversation = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id)
+    if conversation:
+        return {'is_blocked':conversation.is_blocked, "blocked_user_id":conversation.blocked_user_id}
+    else:
+        return{"error":"conversation not found"}
+
+
+
+@app.get('/api/users/{user_id}')
+async def get_user(user_id:int,token:schemas.User=Depends(services.authenticate_token)):
+    """ GET JSON user object based on the object"""
+    user = models.User.get_or_none(models.User.user_id == user_id)
+    if user:
+        return {'user_id':user.user_id, 'email':user.email, 'is_active':user.is_active, 'last_seen':user.get_last_seen()}
+    return {"error":"no user found"}
+
+
+
 
 
 @app.put("/api/users/{user_id}/update_username")
-async def update_username(
-    user_id:int, 
-    username_data: schemas.UserUpdateForm,
-    request:Request,
-    token: str = Depends(services.authenticate_token)):
+async def update_username(user_id:int, username_data: schemas.UserUpdateForm,request:Request,token: str = Depends(services.authenticate_token)):
     #verify if the person making the request is the same person being updated
     token = await services.get_token_http(request)
     user = await services.get_current_user(token)
@@ -142,6 +170,24 @@ async def update_password(
     if operation_update:
         return {"Info":"Update done"}
     return {'error':'Operaion not sucessful'}
+
+
+#remeber to error proof this, in case something happens
+@app.put("/api/block/{conversation_id}/{user_to_be_blocked_id}")
+async def block_user(conversation_id:int, user_to_be_blocked_id:int, request:Request, token:str=Depends(services.authenticate_token)):
+    conversation = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id)
+    conversation.is_blocked = True
+    conversation.blocked_user_id = user_to_be_blocked_id
+    conversation.save()
+    return {"success":"conversation blocked!"}
+
+@app.put("/api/unblock/{conversation_id}")
+async def unblock_user(conversation_id:int, request:Request, token:str=Depends(services.authenticate_token)):
+    conversation = models.Conversation.get_or_none(models.Conversation.conversation_id == conversation_id)
+    conversation.is_blocked = False
+    conversation.blocked_user_id = None 
+    conversation.save()
+    return {"success":"conversation unblocked!"}
 
 
 @app.put("/api/users/{user_id}/upload_image")
@@ -221,7 +267,7 @@ async def create_convo(websocket:WebSocket, token:str = Depends(services.get_tok
             response = {"type":'redirect', "info":"new conversation created", "redirect_url":f"ws://{HOST}:{PORT}/socket/convo/{conversation.conversation_id}"}
             await websocket.send_json(response)
         else:
-            z
+            
             #if the conversation exists
             response = {"type":'redirect', "info":"Conversation already exists between you and the user", "convo_url":f"ws://{HOST}:{PORT}/socket/convo/{conversation.conversation_id}"}
             await websocket.send_json(response)
@@ -308,14 +354,21 @@ async def send_recieve_message_in_conversation(conversation_id:int, websocket:We
             if not await services.conversation_exist(sender.user_id, recipient.user_id) == conversation:
                 #check if sendr or user not in this conversation
                 await websocket.send_json({"error":'sender or recipient not found in the conversation'})
+            elif conversation.is_blocked:
+                #this assumed if the conversationed was blocked
+                is_blockee = (user.user_id == conversation.blocked_user_id)
+                if is_blockee:
+                    await websocket.send_json({"conversation-error":"You have been blocked by this user"})
+                else:
+                    await websocket.send_json({"conversation-error":"You have blocked this user"})
             else:
                 current_date = datetime.utcnow()
                 message = models.Message.create(
-                conversation_id=conversation.conversation_id,
-                sender_id=sender.user_id,
-                recipient_id=recipient.user_id,
-                message_text=payload.message_text,
-                timestamp=current_date
+                                conversation_id=conversation.conversation_id,
+                                sender_id=sender.user_id,
+                                recipient_id=recipient.user_id,
+                                message_text=payload.message_text,
+                                timestamp=current_date
                 )
                 conversation.last_message_sent = current_date
                 conversation.save()
@@ -324,14 +377,12 @@ async def send_recieve_message_in_conversation(conversation_id:int, websocket:We
                 "recipient_id":recipient.user_id,
                 "message_text":payload.message_text
                 }
+                await websocket.send_json({"conversation-success":"Message was sent"})
                 #send the message to the other client
                 if not recipient.user_id in websockets_manager.active_connections:
-                    print("User not online") 
-                else:
-                    other_client = websockets_manager.active_connections[recipient.user_id]
-                    await other_client.send_json({"action":'send_dm', 'message':message_form})
+                    print("User not online")
         else:
-            await websocket.send_json({"error":"conversation not found"})
+            await websocket.send_json({"conversation-error":"conversation not found"})
                 
 
     except WebSocketDisconnect:

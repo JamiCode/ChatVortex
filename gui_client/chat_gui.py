@@ -2,7 +2,7 @@ import kivy
 from kivy.utils import get_color_from_hex
 from kivy.uix.screenmanager import *
 from kivymd.uix.textfield import MDTextField
-from util import get_user_details,get_user_token, get_user_details_from_cache, logout, validate_username_id_string,get_userid, convert_string_to_date, get_profile_picture,decode_base64,get_kivy_chat_account_image_texture, get_kivy_image_from_bytes_texture,download_image, leave_group,add_members
+from util import *
 from kivy.uix.boxlayout import BoxLayout
 from kivymd.uix.list import ThreeLineAvatarIconListItem, OneLineAvatarIconListItem, TwoLineAvatarListItem, OneLineListItem
 from kivy.metrics import dp
@@ -13,7 +13,7 @@ from kivymd.uix.list import ImageLeftWidget
 from kivy.uix.image import AsyncImage, Image
 from kivy.uix.textinput import TextInput
 from kivy.app import App
-from kivy.properties import ColorProperty, BooleanProperty, StringProperty, ListProperty, ObjectProperty, NumericProperty
+from kivy.properties import ColorProperty, BooleanProperty, StringProperty, ListProperty, ObjectProperty, NumericProperty, DictProperty
 from kivy.uix.recycleview.views import RecycleDataViewBehavior
 from kivy.uix.behaviors import FocusBehavior
 from kivy.uix.recycleview.layout import LayoutSelectionBehavior
@@ -27,6 +27,7 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.button import * 
 from kivymd.uix.snackbar import Snackbar
 from kivymd.toast import toast
+from kivy.uix.widget import Widget
 import random
 import asyncio
 import json
@@ -36,7 +37,8 @@ from kivymd.uix.filemanager import MDFileManager
 from kivy.uix.image import CoreImage
 from kivy.uix.floatlayout import FloatLayout
 from kivy.graphics import Color, Ellipse
-from customwidgets import GroupLayout, ParticipantChooseLayout, ListItemWithCheckbox
+from customwidgets import GroupLayout, ParticipantChooseLayout, ListItemWithCheckbox, ViewUserProfileLayout,RecipientProfile
+
 
 
 class CustomImageLeftWidget(AsyncImage):
@@ -97,7 +99,7 @@ class ChatHistoryList(MDRecycleView):
     def decide_hex_color(self, username):
         actual_username = get_user_details_from_cache()["username"]
         if actual_username == username:
-            return "#ff0000"
+            return "#620c8a"
         return "#231a24"
 
     def on_chat_items_update(self, instance, new_chat_items):
@@ -127,19 +129,6 @@ class GroupMemeberLengthDisplay(Label):
     def update_group_members_length_display(self, value):
         self.group_length_display = str(value)
 
-class RecipientProfile(AsyncImage):
-
-    source_display = StringProperty("images/dp.png")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def update_source_display(self, value):
-        self.source_display = value
-
-    def reset_default(self):
-        self.source_display = "images/dp.png"
-
 
 
 class AccountUsernameDisplay(MDLabel):
@@ -165,10 +154,122 @@ class MyTextInput(TextInput):
         else:
             Window.set_system_cursor('arrow')
 
+class SelectableRecycleLayout(Widget):
+    """Adds selection and focus behavior to the view."""
+    owner = ObjectProperty()
+    selected = DictProperty()
+    selects = ListProperty()
+    multiselect = BooleanProperty(False)
 
-class SelectableRecycleBoxLayout(FocusBehavior, LayoutSelectionBehavior,
-                                 RecycleBoxLayout):
+    def clear_selects(self):
+        self.selects = []
+
+    def refresh_selection(self):
+        for node in self.children:
+            try:  #possible for nodes to not be synched with data
+                data = self.parent.data[node.index]
+                node.selected = data['selected']
+            except:
+                pass
+
+    def deselect_all(self):
+        for data in self.parent.data:
+            data['selected'] = False
+        self.refresh_selection()
+        self.selects = []
+        self.selected = {}
+
+    def select_all(self):
+        self.selects = []
+        selects = []
+        for data in self.parent.data:
+           
+            data['selected'] = True
+            selects.append(data)
+        self.selects = selects
+        self.selected = selects[-1]
+        self.refresh_selection()
+
+    def select_node(self, node):
+        if not self.multiselect:
+            self.deselect_all()
+        node.selected = True
+        self.selects.append(node.data)
+        if node.data not in self.parent.data:
+            return
+        self.parent.data[self.parent.data.index(node.data)]['selected'] = True
+        node.data['selected'] = True
+        self.selected = node.data
+
+    def deselect_node(self, node):
+        if node.data in self.selects:
+            self.selects.remove(node.data)
+        if self.selected == node.data:
+            if self.selects:
+                self.selected = self.selects[-1]
+            else:
+                self.selected = {}
+        if node.data in self.parent.data:
+            parent_index = self.parent.data.index(node.data)
+            parent_data = self.parent.data[parent_index]
+            parent_data['selected'] = False
+        node.selected = False
+        node.data['selected'] = False
+
+    def click_node(self, node):
+        #Called by a child widget when it is clicked on
+        if node.selected:
+            if self.multiselect:
+                self.deselect_node(node)
+            else:
+                pass
+                #self.deselect_all()
+        else:
+            if not self.multiselect:
+                self.deselect_all()
+            self.select_node(node)
+            self.selected = node.data
+
+    def remove_node(self, node):
+        self.parent.data.pop(node.index)
+
+    def select_range(self, *_):
+        if self.multiselect and self.selected and self.selected['selectable']:
+            select_index = self.parent.data.index(self.selected)
+            selected_nodes = []
+            if self.selects:
+                for select in self.selects:
+                    if select['selectable']:
+                        if select not in self.parent.data:
+                            continue
+                        index = self.parent.data.index(select)
+                        if index != select_index:
+                            selected_nodes.append(index)
+            else:
+                selected_nodes = [0, len(self.parent.data)]
+            if not selected_nodes:
+                return
+            closest_node = min(selected_nodes, key=lambda x: abs(x-select_index))
+            for index in range(min(select_index, closest_node), max(select_index, closest_node)):
+                selected = self.parent.data[index]
+                selected['selected'] = True
+                if selected not in self.selects:
+                    self.selects.append(selected)
+            self.parent.refresh_from_data()
+
+    def toggle_select(self, *_):
+        if self.multiselect:
+            if self.selects:
+                self.deselect_all()
+            else:
+                self.select_all()
+        else:
+            if self.selected:
+                self.selected = {}
+class SelectableRecycleBoxLayout(SelectableRecycleLayout,RecycleBoxLayout):
     ''' Adds selection and focus behaviour to the view. '''
+
+
 
 class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
     
@@ -189,12 +290,6 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
         self.data = data
         if not data.get("profile_picture"):
             self.left_image.source = "images/dp.png"
-        else:
-            image_byte = decode_base64(data.get("profile_picture"))
-            texture = get_kivy_image_from_bytes_texture(image_byte)
-            self.ids._left_container.clear_widgets()
-            self.left_image = CustomImageLeftWidget(texture=texture)
-            self.ids._left_container.add_widget(self.left_image)
 
 
         return super(SelectedChatItem, self).refresh_view_attrs(
@@ -205,23 +300,33 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
         if super(SelectedChatItem, self).on_touch_down(touch):
             return True
         if self.collide_point(*touch.pos) and self.selectable:
-            return self.parent.select_with_touch(self.index, touch)
+            self.parent.click_node(self)
+            self.apply_selection(self.parent.parent,self.index, True)
     
     def apply_selection(self, rv, index, is_selected):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
         if is_selected:
+            self.bg_color = (21/255, 23/255, 31/255, 1)  # Blue color
 
             app = App.get_running_app()
             #grabbing the  main area and storing in self.root
             self.main_area = app.root.children[0].children[0].children[0]
             # giving the values to the chat_state
-            app.chat_state['recipient_id'] = rv.recipients[index]
-            app.chat_state['conversation_id'] = rv.convos[index]
-            app.chat_state['is_group'] = rv.groups[index]
+            chat_state = {
+                'recipient_id':rv.recipients[index],
+                'conversation_id':rv.convos[index],
+                'is_group': rv.groups[index]
+            }
+            app.update_chat_state(chat_state)
+            self.main_area.view_layout.ids.last_seen_display.recipient_id_update(app.chat_state['recipient_id'])
+
+
+            app.conversation_blocked_status = check_is_blocked(app.chat_state['conversation_id'])
             if not SelectedChatItem.clicked:
                 self.main_area.remove_widget(self.main_area.children[0])
-                self.main_area.add_widget(MainArea.SIDEBAR_2)
+                # print(self.main_area)
+                self.main_area.add_widget(self.main_area.sidebar2)
                 SelectedChatItem.clicked = True
             if not self.data.get("profile_picture"):
                 app.chat_state["recipient_profile_picture_source"] = "images/dp.png"
@@ -237,21 +342,29 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
                 MainArea.group_memebers_object.update_group_members_length_display(f"{app.group_length[rv.convos[index]]} members")
                 asyncio.create_task(client.handle_group_history_connect(app.chat_state['conversation_id']))
             else:
-                activity_text = "online" if app.recipient_is_active[app.chat_state['recipient_id']] else "offline"
+                activity_text = app.recipient_is_active[app.chat_state['recipient_id']]
                 MainArea.group_memebers_object.update_group_members_length_display(f"{activity_text}")
 
 
                 asyncio.create_task(client.handle_chat_history_connect(app.chat_state['conversation_id']))
          
-            MainArea.username_label.update_username_display(rv.data[index]['text'])
+            MainArea.username_label.update_username_display(rv.data[index]['text'])  
+            # Find the new index of the selected item after rearranging
+        else:
+            self.bg_color = App.get_running_app().THEME["bg"]  # Blue color
+
 
 
     def on_kv_post(self, base_widget):
         self.ids._left_container.clear_widgets()
         self.ids._left_container.add_widget(self.left_image)
+
+
+
 class ChatRecycleView(MDRecycleView):
     def __init__(self, **kwargs):
         super(ChatRecycleView, self).__init__(**kwargs)
+        self.viewclass = SelectedChatItem
         self.is_search_data = False
         self.recipients = []
         self.data = []
@@ -260,6 +373,9 @@ class ChatRecycleView(MDRecycleView):
         self.groups = []
         self.groups_id  = {}
         self.bind(data=self.on_data_change)
+    def selectItem(self, itemId):
+        self.selectedItemId = itemId
+        # Update the background color of the selected item
 
     def set_data(self):
         """ This is for setting the data, if the user is in search mode or not"""
@@ -289,18 +405,25 @@ class SideBarBoxLayoutOne(BoxLayout):
 
 class MainArea(BoxLayout):
     create_chat_dialog = None
-    SIDEBAR_2 = None
+    # SIDEBAR_2 = None
     recipient_profile_object = None
     group_memebers_object = None
     group_member_length_display  = None
     username_label = None
     view_profile_text = StringProperty('View Profile')
     leave_group_text = StringProperty("Leave Group")
+    block_text = StringProperty("")
     def __init__(self, sm, **kwargs):
+        self.bind(block_text=self.on_text_variable_change)
         self.sm = sm 
         self.coversation_group_menu  = None
         self.leave_group_confirmation_menu = None
         self.add_members_dialog = None
+        self.blocked_dialog_confirmation = None
+        self.unblocked_dialog_confirmation = None
+        self.sidebar2 = None
+        self.on_view_user_show_dialog = None
+        self.view_layout = ViewUserProfileLayout()
         super().__init__(**kwargs)
         menu_items = [
             {"text":'Logout', 'viewclass':"OneLineListItem", "on_release":self.logout},
@@ -308,12 +431,12 @@ class MainArea(BoxLayout):
             {'text':'New Group', 'viewclass':'OneLineListItem', 'on_release':self.show_create_group_screen}
         ]
 
-        chat_menu_items = [
-            {"text":'block', 'viewclass':"OneLineListItem",'on_release':lambda :print('hw')},
+        self.chat_menu_items = [
+            {"text":self.block_text, 'viewclass':"OneLineListItem",'on_release':self.block_dialog_show},
+            {'text':"View User", "viewclass":"OneLineListItem", "on_release":self.on_view_user_show}
         ]
 
         group_chat_menu_items = [
-          {"text":'block', 'viewclass':"OneLineListItem",'on_release':lambda :print('hw')},
             {"text":'View Group', 'viewclass': 'OneLineListItem', 'on_release':self.show_view_conversation},
             {'text':"Leave Group", 'viewclass':'OneLineListItem', "on_release":self.show_leave_group_dialog},
             {'text':"Add Members ", 'viewclass':"OneLineListItem", "on_release":self.show_add_member_dialog}
@@ -325,7 +448,7 @@ class MainArea(BoxLayout):
             pos_hint={"center_x": 0.5, "center_y": 0.5}
         )
         MainArea.chat_menu = MDDropdownMenu(
-                items=chat_menu_items,
+                items=self.chat_menu_items,
                 caller=self.ids.icon_button2,
                 width_mult=2,
                 pos_hint={"center_x": 0.5, "center_y": 0.5}
@@ -338,11 +461,79 @@ class MainArea(BoxLayout):
         )
 
 
+    def on_text_variable_change(self, instance, value):
+        # print("changed  ")
+        # This method will be called whenever the text_variable changes
+        MainArea.chat_menu.items[0]['text'] = value
+        if  MainArea.chat_menu.items[0]['text'] == "unblock":
+            MainArea.chat_menu.items[0]['on_release'] = self.unblock_dialog_show
+        else:
+           MainArea.chat_menu.items[0]['on_release'] = self.block_dialog_show
+
+
+
     def menu_open(self, is_group):
         if is_group:
             MainArea.group_menu.open()
-            return
-        MainArea.chat_menu.open()
+        else:
+            app = App.get_running_app()
+            self.view_layout.view_text = str(get_username(App.get_running_app().chat_state['recipient_id']))
+            if app.conversation_blocked_status["is_blocked"] and app.conversation_blocked_status["blocked_user_id"] != get_userid_from_cache():
+                #if the conversation is blocked and the user is not the blocked user, he has the option to unblock
+                self.block_text = "unblock"
+                MainArea.chat_menu.open()
+            elif not app.conversation_blocked_status["is_blocked"]:
+                self.block_text = "block"
+                MainArea.chat_menu.open()
+
+
+
+
+    def unblock_dialog_show(self):
+        if not self.unblocked_dialog_confirmation:
+            self.unblocked_dialog_confirmation = MDDialog(text="Are you sure you want to unblock this user?", type="custom",buttons=[
+                    MDFlatButton(text="Cancel", on_release=lambda dialog:self.unblocked_dialog_confirmation.dismiss()),
+                    MDFlatButton(text="Confirm", on_release=self.unblock)
+                ] )
+        self.unblocked_dialog_confirmation.open()
+    def unblock(self, instance):
+        conversation_id = App.get_running_app().chat_state["conversation_id"]
+        unblocking_process = unblock_util(conversation_id)
+        if unblocking_process:
+            Snackbar(text="Successfully unblocked this user",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
+            self.unblocked_dialog_confirmation.dismiss()
+
+
+    def block_dialog_show(self):
+        if not self.blocked_dialog_confirmation:
+            self.blocked_dialog_confirmation = MDDialog(
+                text="Do you want to block this user?",
+                type="custom",
+                buttons=[
+                    MDFlatButton(text="Cancel", on_release=lambda dialog:self.blocked_dialog_confirmation.dismiss()),
+                    MDFlatButton(text="Confirm", on_release=self.block)
+                ] 
+                )
+        self.blocked_dialog_confirmation.open()
+    def block(self, instance):
+        conversation_id = App.get_running_app().chat_state["conversation_id"]
+        recipient_id = App.get_running_app().chat_state['recipient_id']
+        blocking_process = block_util(conversation_id, recipient_id)
+        if blocking_process == True:
+            Snackbar(text="Successfully Blocked this user",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
+            self.blocked_dialog_confirmation.dismiss()
+
+    def on_view_user_show(self):
+        if not self.on_view_user_show_dialog:
+            self.on_view_user_show_dialog = MDDialog(
+                    title="User Profile",
+                    type="custom",
+                    content_cls=self.view_layout,
+                )
+
+
+        self.on_view_user_show_dialog.open()
+
 
     def show_leave_group_dialog(self):
         if not self.leave_group_confirmation_menu:
@@ -365,9 +556,7 @@ class MainArea(BoxLayout):
         new_users_ids = [get_userid(name).get('id') for name in ListItemWithCheckbox.checked_options ]
         rv = self.ids.chat_list
         group_id = rv.groups_id[App.get_running_app().chat_state['conversation_id']]
-        print(type(group_id), group_id)
         for new_user_id in new_users_ids:
-            print(new_user_id, 66)
             add_members_process = add_members( group_id, new_user_id)
             if add_members_process.get("detail"):
                 Snackbar(text=f"{add_members_process['detail']}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#ff0000")).open()
@@ -383,8 +572,9 @@ class MainArea(BoxLayout):
         leave_group_process = leave_group(group_id)
         if leave_group_process == True:
             self.leave_group_confirmation_menu.dismiss()
-            self.remove_widget(MainArea.SIDEBAR_2)
-            self.add_widget(MDLabel(text="Select a Chat to start Chatting"))
+            # self.remove_widget(MainArea.SIDEBAR_2)
+            self.remove_widget(self.sidebar2)
+            self.add_widget(MDLabel(text="Select a Chat to start Chatting", halign="center"))
             Snackbar(text="Successfully left the group",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
             SelectedChatItem.clicked = False
         else:
@@ -420,8 +610,9 @@ class MainArea(BoxLayout):
         MainArea.recipient_profile_object = self.ids.rp
         MainArea.group_memebers_object  = self.ids.group_member_length_display
         MainArea.username_label = self.ids.username_label
-        MainArea.SIDEBAR_2 = self.ids.sidebar2
+        self.sidebar2 = self.ids.sidebar2
        
+
     def get_dimension(self):
      print(Window.size)
 
@@ -450,7 +641,7 @@ class MainArea(BoxLayout):
         app =App.get_running_app() 
         app.state['is_authenticated'] = False
         app.state = {}
-        app.chat_state = {}
+        app.update_chat_state({})
         app.convos = set()
         asyncio.create_task(handle_close_websocket_connections())
         app.state["on_first_boot"] = False

@@ -34,7 +34,7 @@ from kivymd.uix.textfield import MDTextFieldRect
 from kivymd.uix.list import IRightBodyTouch, OneLineAvatarIconListItem
 from kivymd.uix.selectioncontrol import MDCheckbox
 from kivymd.icon_definitions import md_icons
-from kivy.properties import StringProperty, NumericProperty
+from kivy.properties import StringProperty, NumericProperty, DictProperty
 from websocket_kivy import handle_create_group_functionality    
 from kivymd.uix.snackbar import Snackbar
 from kivymd.uix.spinner import MDSpinner
@@ -199,7 +199,7 @@ class SettingsScreen(Screen):
                     Snackbar(text="Username Successfully, Login Back to see change",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#00ff00")).open()
                     logout()
                     asyncio.create_task(handle_close_websocket_connections())
-                    app.state["on_first_boot"] = False
+                    App.get_running_app().state["on_first_boot"] = False
                     self.sm.current = "splash"
             elif self.setting == "password":
                 password_text_input = self.ids.settings_layout.children[1].text
@@ -400,13 +400,14 @@ class SignUpScreen(Screen):
 
         if not self.sign_up_dialog:
             self.sign_up_dialog = MDDialog(
-                    text="Regesting you account",
+                    text="Registering your account",
                     content_cls=MDSpinner(),
                     size_hint=(None, None),
                     size=(dp(400), dp(400))
 
                 )
             self.sign_up_dialog.add_widget(MDSpinner(size_hint=(None, None), size=(dp(20), dp(20))))
+        self.username_dialog.dismiss()
         self.sign_up_dialog.open()
         self.thread = threading.Thread(target=self.sign_up_user, args=(user_information,))
         self.thread.start()
@@ -451,11 +452,18 @@ class ChatVortex(MDApp):
     #storing chat state across all components of the app. this helps the keep track which is the curret chat, sender and recipient 
 
     # initializing chat_state variale   
-    chat_state:dict[str, int | None] = {'conversation_id':None, 'recipient_profile_picture_source':None, "is_group":False}
+    chat_state = DictProperty({
+        'conversation_id': None,
+        'recipient_profile_picture_source': None,
+        "is_group": False,
+        "recipient_id":None,
+        "sender_id":None
+    })
     convos = set()
     group_length:dict[int:int] = {}
     recipient_is_active = {}
     websocket_connections = dict()
+    conversation_blocked_status = {"is_blocked":None, "blocked_user_id":None}
 
     THEME = {
     'bg': (44/255, 47/255, 63/255),
@@ -506,8 +514,15 @@ class ChatVortex(MDApp):
         return root_widget
 
     def on_stop(self):
-        Window.close()
+        Window.close
 
+    def update_chat_state(self, new_state):
+        self.chat_state.update(new_state)
+
+    # Callback function to handle changes in chat_state
+    def on_chat_state(self, instance, value):
+        print("chat_state changed:", value)
+      
 
 async def main():
     try:

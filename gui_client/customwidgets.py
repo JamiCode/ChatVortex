@@ -4,10 +4,29 @@ from kivymd.uix.label import MDLabel
 from kivymd.uix.button import  MDFlatButton
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
-from util import get_group, leave_group
+from util import get_group, leave_group, get_username, get_user
 from kivymd.uix.scrollview import MDScrollView
-from kivymd.uix.list import MDList,OneLineAvatarIconListItem
-from kivy.properties import StringProperty
+from kivymd.uix.list import MDList,OneLineAvatarIconListItem,TwoLineAvatarListItem
+from kivy.properties import *
+from kivy.uix.image import AsyncImage
+
+
+
+
+class LastSeenLabelDisplay(MDLabel):
+    recipient_id = StringProperty("")
+    last_seen = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def recipient_id_update(self, value):
+        if value is None:
+            recipient_id = ""
+            return
+        self.recipient_id = str(value)
+        self.last_seen = get_user(int(self.recipient_id)).get("last_seen")
+
 
 
 class ListItemWithCheckbox(OneLineAvatarIconListItem):
@@ -21,11 +40,16 @@ class ListItemWithCheckbox(OneLineAvatarIconListItem):
         else:
             self.__class__.checked_options.remove(text)
 
+class MembersShowOneLineAvatarListIconIem(TwoLineAvatarListItem):
+    icon = StringProperty("account")
+
+
 
 
 class GroupLayout(MDBoxLayout):
     def __init__(self,conversation_id=None, **kwargs):
         super().__init__(**kwargs)
+        self.view_mebers_dialog = None
         if conversation_id is not None:
             self.backend_group_response = get_group(conversation_id)
         self.orientation = "vertical"
@@ -33,17 +57,46 @@ class GroupLayout(MDBoxLayout):
         self.group_id = self.backend_group_response.get('group_id')
         self.members_label = MDLabel(text=f"Member Length: {self.backend_group_response.get('members_length')}")
         self.owner = MDLabel(text=f"Owner:{self.backend_group_response.get('admin').get('__data__').get('username')}")
-        self.leave_button = MDFlatButton(text="Click to leave group", on_release=self.on_leave_group)
-        self.add_button = MDFlatButton(text="Click to add members")
+        self.view_mebers = MDFlatButton(text="View Members", on_press=self.on_view_members)      
+       
         self.add_widget(self.group_name)
         self.add_widget(self.members_label)
         self.add_widget(self.owner)
-        self.add_widget(self.leave_button)
-        self.add_widget(self.add_button)
+        self.add_widget(self.view_mebers)
 
-    def on_leave_group(self, instance):
-        leaving_group_process = leave_group(self.group_id)
 
+    def on_view_members(self, instance):
+        if not self.view_mebers_dialog:
+            self.view_mebers_dialog = MDDialog(
+                        title="Participants",
+                        type="custom",
+                        content_cls=ViewMemberLayout(members=self.backend_group_response.get("members"),size_hint_y=None, height="300dp", spacing="4dp"),
+                        buttons=[
+                            MDFlatButton(
+                                text="Go Back",
+                                # text_color=App.get_running_app().THEME['accent_color'],
+                                font_name="fonts/Roboto-Bold.ttf",
+                                font_size="15sp",
+                                on_release=lambda dialog:self.view_mebers_dialog.dismiss()
+                            ),
+                        ],
+
+                )
+        self.view_mebers_dialog.open()
+
+class ViewMemberLayout(MDBoxLayout):
+    def __init__(self, members=None, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = "vertical"
+        self.scrollview = MDScrollView()
+        self.list = MDList()
+        if members is not None:
+            for i in members:
+                self.list.add_widget(MembersShowOneLineAvatarListIconIem(text=str(i.get("__data__").get("username") ) + f"#{str(i.get('__data__').get('user_id'))}"))
+            self.scrollview.add_widget(self.list)
+            self.add_widget(self.scrollview)
+
+       
 class ParticipantChooseLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,4 +107,35 @@ class ParticipantChooseLayout(BoxLayout):
             self.list.add_widget(ListItemWithCheckbox(text=convo))
         self.scrollview.add_widget(self.list)
         self.add_widget(self.scrollview)
+        print(App.get_running_app().convos)
 
+
+class ViewUserProfileLayout(MDBoxLayout):
+    view_text = ObjectProperty()
+    chat_state = StringProperty()
+    def __init__(self, chat_state=None,**kwargs):
+        super().__init__(**kwargs)
+        self.bind(view_text=self.on_view_text_change)
+
+    def on_view_text_change(self, instance, value):
+        print("View Text changed")
+        self.ids.show_user_profile_id_text.text = str(value)
+
+    def update_chat_state(self, value):
+        self.chat_state = str(value)
+
+
+
+
+class RecipientProfile(AsyncImage):
+
+    source_display = StringProperty("images/dp.png")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def update_source_display(self, value):
+        self.source_display = value
+
+    def reset_default(self):
+        self.source_display = "images/dp.png"

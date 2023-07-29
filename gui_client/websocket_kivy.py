@@ -2,7 +2,7 @@ import asyncio
 import websockets
 from credentials import HOST
 from kivy.event import EventDispatcher
-from util import get_user_token, get_userid, get_last_message_from_backend,get_user_details_from_cache
+from util import *
 from kivy.clock import Clock
 from kivy.app import App
 from kivymd.uix.snackbar import Snackbar
@@ -66,8 +66,9 @@ class WebSocketClient(EventDispatcher):
 						message =str(response_data['message']['message_text'])
 						self.dispatch('on_personal_dm_receieved', message)
 
+
 		
-		except websockets.exceptions.ConnectionClosedError:
+		except websockets.exceptions.ConnectionClosedError:	
 			"""Any abruptly closure from the server side """
 			print("[INFO] convos Websocket was closed abruptly by the server")
 		except websockets.exceptions.ConnectionClosedOK:
@@ -140,6 +141,11 @@ class WebSocketClient(EventDispatcher):
 					extra_headers={"Authorization":f"Bearer {self.token}"}
 					)
 			await websocket.send(json.dumps(message_form))
+			response = await websocket.recv()
+			response_data = json.loads(response)
+			if response_data.get("conversation-error"):
+				Snackbar(text=f'{response_data["conversation-error"]}. You cannot message this user',snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#ff0000")).open()
+
 		except websockets.exceptions.ConnectionClosedError:
 			"""Any abruptly closure from the server side """
 			print("[INFO] convos Websocket was closed abruptly by the server")
@@ -174,13 +180,13 @@ class WebSocketClient(EventDispatcher):
 
 	#change the for loop to better reflect
 	def on_initial_conversation(self,**kwargs):
+		# print(self.initial_conversations)
+		self.initial_conversations = sorted(self.initial_conversations, key=lambda x: x['last_message_sent_time'], reverse=True)
 		rv = self.main_area_layout.ids.chat_list
-
 		rv.data = []
 		rv.recipientsget_last_message_from_backend= []
 		rv.groups=[]
 		app = App.get_running_app()
-		print(self.initial_conversations)
 
 		for convo in self.initial_conversations:
 
@@ -195,17 +201,22 @@ class WebSocketClient(EventDispatcher):
 				rv.data.append(convo_prop)
 				rv.groups.append(False)
 				app.convos.add(convo_prop['text'])
-				app.recipient_is_active[convo['other_participant']['user_id']] = convo['other_participant']['activity']
+				if convo["other_participant"]["activity"]:
+					app.recipient_is_active[convo['other_participant']['user_id']] = f"active now"
+				else:
+					app.recipient_is_active[convo["other_participant"]["user_id"]] = f"""last seen {convo["other_participant"]["last_seen"]}"""
 
+		self.conversations_indicator_list = self.initial_conversations
+		#create the same copy for comparing purposes, when the list updates
 		rv.recipients = [ None if convo['conversation_type'] == "Group" else convo['other_participant']['user_id'] for convo in self.initial_conversations]
-		rv.convos = [convo['conversation_id'] for convo in self.initial_conversations] 
+		rv.convos = [convo['conversation_id'] for convo in self.initial_conversations]
+
+		
 
 
 	def on_conversations_updated(self,**kwargs):
-
-
+		self.initial_conversations = sorted(self.initial_conversations, key=lambda x: x['last_message_sent_time'], reverse=True)
 		rv = self.main_area_layout.ids.chat_list
-
 		rv.data = []
 		rv.recipients= []
 		rv.groups=[]
@@ -223,10 +234,25 @@ class WebSocketClient(EventDispatcher):
 				rv.data.append(convo_prop)
 				rv.groups.append(False)
 				app.convos.add(convo_prop['text'])
-				app.recipient_is_active[convo['other_participant']['user_id']] = convo['other_participant']['activity']
+			
+				if convo["other_participant"]["activity"]:
+					app.recipient_is_active[convo['other_participant']['user_id']] = f"active now"
+				else:
+					app.recipient_is_active[convo["other_participant"]["user_id"]] = f"""last seen {convo["other_participant"]["last_seen"]}"""
+
+
+
+
 
 		rv.recipients = [ None if convo['conversation_type'] == "Group" else convo['other_participant']['user_id'] for convo in self.initial_conversations]
 		rv.convos = [convo['conversation_id'] for convo in self.initial_conversations]
+		view_instance = rv.view_adapter.get_view(data_item=rv.data[0], viewclass=rv.viewclass, index=0)
+		#if user sends message, it should be moved at the beginning recycle view indicating the most recent chat, he is chat
+		rv_layout = rv.ids.layout
+		view_instance.apply_selection(rv, 0, True)
+		rv_layout.select_node(view_instance)
+
+
 
 	def on_initial_chat_history(self,res_chat_list):
 		rv=self.main_area_layout.ids.chat_history

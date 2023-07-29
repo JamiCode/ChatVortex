@@ -130,6 +130,15 @@ def get_user_details_from_cache():
         user_info = json_data['username']
     return user_info
 
+def get_userid_from_cache():
+    user_info = None
+    
+    with open('cache.json','r') as file:
+        content = file.read()
+        json_data = json.loads(content)
+        user_info = json_data['username']
+    return user_info["user_id"]
+
 
 def change_profile_picture_locally(base_64_encoded:str):
     """ Take the bae 64 encoded image returned by the server, and save it locally"""
@@ -175,7 +184,48 @@ def logout():
     keyring.delete_password(service_name, username)
     reset_profile_picture_to_default()
 
+def check_is_blocked(conversation_id):
+    user_id = None
+    token = get_user_token()
+    with open('cache.json', 'r') as file:
+        content = file.read()
+        json_data = json.loads(content)
+        user_id = json_data['username']['user_id']
+    back_endpoint = f'http://{HOST}:8000/api/is_blocked/{conversation_id}'
+    headers = { "Content-Type": "application/json","Authorization": f"Bearer {token}"}
+    response = httpx.get(back_endpoint, headers=headers)
+    if not response.status_code == 200:
+        return False
+    return response.json()
 
+
+def block_util(conversation_id, user_to_be_blocked_id):
+    user_id = None
+    token = get_user_token()
+    with open('cache.json', 'r') as file:
+        content = file.read()
+        json_data = json.loads(content)
+        user_id = json_data['username']['user_id']
+    back_endpoint = f'http://{HOST}:8000/api/block/{conversation_id}/{user_to_be_blocked_id}'
+    headers = { "Content-Type": "application/json","Authorization": f"Bearer {token}"}
+    response = httpx.put(back_endpoint, headers=headers)
+    if not response.status_code == 200:
+        return False
+    return True
+
+def unblock_util(conversation_id):
+    user_id = None
+    token = get_user_token()
+    with open('cache.json', 'r') as file:
+        content = file.read()
+        json_data = json.loads(content)
+        user_id = json_data['username']['user_id']
+    back_endpoint = f'http://{HOST}:8000/api/unblock/{conversation_id}'
+    headers = { "Content-Type": "application/json","Authorization": f"Bearer {token}"}
+    response = httpx.put(back_endpoint, headers=headers)
+    if not response.status_code == 200:
+        return False
+    return True
 
 def update_user_name(username:str):
     user_id = None
@@ -229,10 +279,24 @@ def get_userid(username:str):
     response = httpx.get(back_endpoint)
     return response.json()
 
+
+
+def get_username(user_id:int):
+    back_endpoint = f"http://{HOST}:8000/api/username/{user_id}"
+    response = httpx.get(back_endpoint)
+    return response.json().get('username')
+
 def get_group(conversation_id:int):
      back_endpoint = f"http://{HOST}:8000/api/groups/{conversation_id}"
      response = httpx.get(back_endpoint)
      return response.json()
+
+def get_user(user_id:int):
+    token = get_user_token()
+    headers = {"Authorization":f"Bearer {token}"}
+    backend_endpoint = f"http://{HOST}:8000/api/users/{user_id}"
+    response = httpx.get(backend_endpoint, headers=headers)
+    return response.json()
 
 
 def leave_group(group_id:int):
