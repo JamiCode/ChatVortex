@@ -1,2 +1,6 @@
 # ChatVortex
-Making a chat app using fast api backend, kivy desktop client, and django for the webapp:
+A Desktop Chat Application, developed to learn about websockets. 
+# Frameworks Used
+- FastAPI Python
+- Python KIVY Framework
+  
