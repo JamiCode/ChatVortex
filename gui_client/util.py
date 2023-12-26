@@ -289,6 +289,7 @@ def get_username(user_id:int):
 def get_group(conversation_id:int):
      back_endpoint = f"http://{HOST}:8000/api/groups/{conversation_id}"
      response = httpx.get(back_endpoint)
+     print(response, " response ")
      return response.json()
 
 def get_user(user_id:int):
@@ -319,7 +320,7 @@ def add_members(group_id, new_user_id):
     response = httpx.post(endpoint, json=request_body, headers=headers)
     if not response.status_code == 200:
         #something is wrong with the requests
-       return response.json()
+       return response.json()["detail"]
     return response.json()
 
 

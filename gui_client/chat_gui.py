@@ -100,6 +100,9 @@ class ChatHistoryList(MDRecycleView):
         actual_username = get_user_details_from_cache()["username"]
         if actual_username == username:
             return "#620c8a"
+        elif actual_username == "event":
+            return "#ff0000"
+       
         return "#231a24"
 
     def on_chat_items_update(self, instance, new_chat_items):
@@ -290,6 +293,12 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
         self.data = data
         if not data.get("profile_picture"):
             self.left_image.source = "images/dp.png"
+        else:
+            image_byte = decode_base64(data.get("profile_picture"))
+            texture = get_kivy_image_from_bytes_texture(image_byte)
+            self.ids._left_container.clear_widgets()
+            self.left_image = CustomImageLeftWidget(texture=texture)
+            self.ids._left_container.add_widget(self.left_image)
 
 
         return super(SelectedChatItem, self).refresh_view_attrs(
@@ -307,6 +316,7 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
         ''' Respond to the selection of items in the view. '''
         self.selected = is_selected
         if is_selected:
+            # print(self.data)
             self.bg_color = (21/255, 23/255, 31/255, 1)  # Blue color
 
             app = App.get_running_app()
@@ -325,14 +335,14 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
             app.conversation_blocked_status = check_is_blocked(app.chat_state['conversation_id'])
             if not SelectedChatItem.clicked:
                 self.main_area.remove_widget(self.main_area.children[0])
-                # print(self.main_area)
+                #the error is here. basically it removed byt cannot detect sidebar2. happens when you creare a new user
                 self.main_area.add_widget(self.main_area.sidebar2)
                 SelectedChatItem.clicked = True
             if not self.data.get("profile_picture"):
                 app.chat_state["recipient_profile_picture_source"] = "images/dp.png"
                 # this grabs the RecipientProfile Widget in Sidebar 2, and call the reset_default method
                 MainArea.recipient_profile_object.reset_default()
-            else:
+            if self.data.get("profile_picture"):
                 image_src = download_image(filepath=f"images/recipients/{rv.recipients[index]}", image_byte=self.data.get("profile_picture"))
                 app.chat_state["recipient_profile_picture_source"] = image_src
                 MainArea.recipient_profile_object.update_source_display(image_src)
@@ -341,7 +351,7 @@ class SelectedChatItem(RecycleDataViewBehavior, TwoLineAvatarListItem):
             if app.chat_state['is_group']:
                 MainArea.group_memebers_object.update_group_members_length_display(f"{app.group_length[rv.convos[index]]} members")
                 asyncio.create_task(client.handle_group_history_connect(app.chat_state['conversation_id']))
-            else:
+            if not app.chat_state['is_group']:
                 activity_text = app.recipient_is_active[app.chat_state['recipient_id']]
                 MainArea.group_memebers_object.update_group_members_length_display(f"{activity_text}")
 
@@ -549,20 +559,30 @@ class MainArea(BoxLayout):
 
     def show_add_member_dialog(self):
         if not self.add_members_dialog:
-            self.add_members_dialog = MDDialog(title="Choose participants below",type="custom",content_cls=ParticipantChooseLayout(size_hint_y=None, height="300dp", spacing="4dp"), buttons=[MDFlatButton(text="Cancel", on_release=lambda dialog:self.add_members_dialog.dismiss()), MDFlatButton(text="Add", on_release=self.on_add_member)])
+            self.add_members_dialog = MDDialog(title="Choose participants below",type="custom",content_cls=ParticipantChooseLayout(conversation_id=App.get_running_app().chat_state["conversation_id"],size_hint_y=None, height="300dp", spacing="4dp"), buttons=[MDFlatButton(text="Cancel", on_release=lambda dialog:self.add_members_dialog.dismiss()), MDFlatButton(text="Add", on_release=self.on_add_member)])
         self.add_members_dialog.open()
 
     def on_add_member(self, instance):
-        new_users_ids = [get_userid(name).get('id') for name in ListItemWithCheckbox.checked_options ]
+        added_member  = None
+        new_users_ids = [(get_userid(name).get('id'), name) for name in ListItemWithCheckbox.checked_options ]
         rv = self.ids.chat_list
-        group_id = rv.groups_id[App.get_running_app().chat_state['conversation_id']]
-        for new_user_id in new_users_ids:
+        rv_chat_history = self.ids.chat_history
+        conversation_id = App.get_running_app().chat_state['conversation_id']
+        group_id = rv.groups_id[conversation_id]
+        for new_user in new_users_ids:
+            new_user_id = new_user[0]
+            new_user_name = new_user[1]
             add_members_process = add_members( group_id, new_user_id)
+            added_member = (new_user_id, new_user_name)
             if add_members_process.get("detail"):
                 Snackbar(text=f"{add_members_process['detail']}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#ff0000")).open()
                 return
         Snackbar(text=f"{add_members_process['message']}",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=get_color_from_hex("#00ff00")).open()
-
+        # rv_chat_history.data.append({"message":"New member added", 'sender_username':'event', 'message_time':'now', 'chat_item_background_color':get_color_from_hex("#ff0000")})
+        # rv_chat_history.refresh_from_data()
+        asyncio.gather(client.handle_send_functionality_group(message_text=f'{added_member[1]}#{added_member[0]} has joined the group', conversation_id=conversation_id, sender_id=00))
+        rv_chat_history.data[-1]['sender_username'] = "event"
+        #ensuring tha that the sender_username title is event
         self.add_members_dialog.dismiss()
 
     def leave_group_dialog(self, instance):
@@ -610,7 +630,7 @@ class MainArea(BoxLayout):
         MainArea.recipient_profile_object = self.ids.rp
         MainArea.group_memebers_object  = self.ids.group_member_length_display
         MainArea.username_label = self.ids.username_label
-        self.sidebar2 = self.ids.sidebar2
+        self.sidebar2 = self.ids.sidebar2.__self__
        
 
     def get_dimension(self):

@@ -117,7 +117,9 @@ async def get_group(conversation_id:int):
     group = models.Group.get_or_none(models.Group.conversation_id == conversation_id)
     if group:
         group_members = await services.get_group_members(group.group_id)
-        return {'group_name':group.group_name, 'group_id':group.group_id, 'conversation_id':group.conversation_id, 'admin':group.admin, 'members_length':group.members_length, 'members':group_members}
+        admin = group.admin
+        del admin.__dict__['__data__']["hashed_password"]
+        return {'group_name':group.group_name, 'group_id':group.group_id, 'conversation_id':group.conversation_id, 'admin':admin, 'members_length':group.members_length, 'members':group_members}
     return {"error":"no group with the given conversation"}
 
 @app.get("/api/is_blocked/{conversation_id}")

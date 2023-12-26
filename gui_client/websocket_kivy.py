@@ -177,6 +177,8 @@ class WebSocketClient(EventDispatcher):
 			create_chat_dialog.dismiss()
 
 
+	async def handle_user_joined(self):
+		pass
 
 	#change the for loop to better reflect
 	def on_initial_conversation(self,**kwargs):
@@ -223,18 +225,18 @@ class WebSocketClient(EventDispatcher):
 		app = App.get_running_app()
 
 		for convo in self.initial_conversations:
+
 			if convo['conversation_type'] == "Group":
 				convo_prop = {'text': f"Group:{convo['group_name']}", 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0}
-				rv.data.append(convo_prop)
 				rv.groups.append(True)
-				rv.groups_id[convo["conversation_id"]] = convo["group_id"]	
+				rv.data.append(convo_prop)
+				rv.groups_id[convo["conversation_id"]] = convo["group_id"]
 				app.group_length[convo["conversation_id"]] = convo["group_length"]
 			else:
-				convo_prop = {'text': convo['other_participant']['username'], 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0}
+				convo_prop = {'text': convo['other_participant']['username'], 'secondary_text':f'{convo["last_message_sent"]}','ripple_scale': 0, "profile_picture":convo["profile_picture"]}
 				rv.data.append(convo_prop)
 				rv.groups.append(False)
 				app.convos.add(convo_prop['text'])
-			
 				if convo["other_participant"]["activity"]:
 					app.recipient_is_active[convo['other_participant']['user_id']] = f"active now"
 				else:

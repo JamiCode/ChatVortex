@@ -96,8 +96,6 @@ class ConversationBottomSheetContent(BoxLayout):
                 return  
             initiator_id = App.get_running_app().chat_state['sender_id']
             initial_members = [get_userid(name)['id'] for name in ListItemWithCheckbox.checked_options]
-            print(initiator_id)
-            print(initial_members)
             asyncio.create_task(handle_create_group_functionality(initiator_id=initiator_id, initial_members=initial_members, group_name=self.widget.ids.group_name.text))
 
 class MyTextField(MDTextField):
@@ -113,6 +111,15 @@ class ChangePasswordLabel(Label):
         self.bold = True
         self.size_hint_y = None
         self.height = dp(48)
+class ChangeProfilePictureLabel(Label):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.text = "Change Profile Picture"
+        self.font_size = "24sp"
+        self.bold = True
+        self.size_hint_y = None
+        self.height = dp(48)
+
 
 class PasswordTextInput(TextInput):
     def __init__(self, **kwargs):
@@ -163,11 +170,12 @@ class SettingsScreen(Screen):
         self.sm = sm
         self.setting = None
         self.manager_open = False
-        self.relative_layout = MDRelativeLayout()
-        self.image_cropper_layout = MDRelativeLayout(md_bg_color=(1,0,0,1))
-        self.circular_profile_image_cropper = CircularProfileImageCropper(size_hint=(None, 0.6), width=self.height)
+        self.relative_layout = MDRelativeLayout(size_hint_y=0.125)
+        self.image_cropper_layout = MDRelativeLayout(size_hint=(1,1))
+        self.circular_profile_image_cropper = CircularProfileImageCropper(size_hint=(None, 0.9),width=self.height)  
         self.image_cropper_layout.add_widget(self.circular_profile_image_cropper)
         self.image_widget = MDBoxLayout(orientation="vertical", padding=(10,10), md_bg_color=App.get_running_app().THEME['dark_bg'], spacing=dp(5), radius=dp(10))
+        self.image_widget.size = self.image_widget.minimum_size  # Adjust size to content
         self.image_source = get_profile_picture()
         self.user_image = AsyncImage(source=self.image_source)
         self.user_image.ratio = True
@@ -176,15 +184,16 @@ class SettingsScreen(Screen):
         self.edit_image_button = MDIconButton(icon="pencil")
         self.save_button = MDFillRoundFlatButton(text="Save",size_hint=(0.2, None), pos_hint={'x':0, 'top':0.95})
         self.discard_button = MDFlatButton(text="Discard", size_hint=(0.2, None), pos_hint={'x':0.3, 'top':0.95})
+        self.crop_button = MDFlatButton(text="Crop", size_hint=(0.2, None), pos_hint={'x':0.5, 'top':0.95}, on_release=self.on_crop)
+
         self.file_manager = MDFileManager(exit_manager=self.on_file_manager_close, select_path=self.on_select_path)
         self.save_button.bind(on_release=self.on_save)
         self.discard_button.bind(on_release=self.on_discard)
         self.edit_image_button.bind(on_release=self.on_choose_image)
         self.relative_layout.add_widget(self.save_button)
         self.relative_layout.add_widget(self.discard_button)
-        self.image_widget.add_widget(self.user_image)
+        self.image_widget.add_widget(self.image_cropper_layout)
         self.image_widget.add_widget(self.edit_image_button)
-
     def on_save(self, instance):
         possible_setting = ["password", "username", "image"]
         if self.setting and self.setting in possible_setting:
@@ -210,8 +219,25 @@ class SettingsScreen(Screen):
                 Snackbar(text="Password Successfully, Login Back to see change",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#00ff00")).open()
                 logout()
                 asyncio.create_task(handle_close_websocket_connections())
-                app.state["on_first_boot"] = False
+                App.get_running_app().state["on_first_boot"] = False
                 self.sm.current = 'splash'
+            else:
+                if  self.ids.circle_preview.source == 'missing_profile_image.png':
+                    print(self.ids.circle_preview.source)
+                    Snackbar(text="Please Click on the icon to select a new profile image",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#ff0000")).open()
+                    return
+                new_profile_picture = update_profile_picture(self.ids.circle_preview.source)
+                if not new_profile_picture:
+                    Snackbar(text="Something went wrong while trying to update image",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#ff0000")).open()
+                    return
+                Snackbar(text="Profile Picture Successfully, Login Back to see change",snackbar_x="10dp",snackbar_y="10dp",size_hint_x=(Window.width - (dp(10) * 2)) / Window.width, bg_color=utils.get_color_from_hex("#00ff00")).open()
+                logout()
+                asyncio.create_task(handle_close_websocket_connections())
+                App.get_running_app().state["on_first_boot"] = False
+                self.sm.current = 'splash'
+
+                    
+
 
 
 
@@ -220,10 +246,14 @@ class SettingsScreen(Screen):
         self.file_manager.show(os.path.expanduser("~"))
 
     def on_select_path(self, path:str):
+        self.image_source = path
         self.user_image.source = path
         self.circular_profile_image_cropper.reset()
-        self.circular_profile_image_cropper.source = path
+        self.circular_profile_image_cropper.source = self.image_source
+        self.circular_profile_image_cropper.reset()
+        self.circular_profile_image_cropper.source = self.image_source
         self.file_manager.close()
+        self.image_widget.size = self.image_widget.minimum_size
     def on_file_manager_close(self, *args):
         self.manager_open = False
         self.file_manager.close()
@@ -233,36 +263,50 @@ class SettingsScreen(Screen):
             self.user_image.source = get_profile_picture()
             return
         self.ids.settings_layout.children[1].text = ""
+    def on_crop(self, instance):
+        crop_result = self.circular_profile_image_cropper.get_image_crop()
+        self.ids.circle_preview.source = self.image_source
+        self.ids.circle_preview.update_crop_values(*crop_result)
+
+       
 
 
     def go_back(self):
         self.sm.current = "dashboard"
     def setEdit(self, type_):
-        possible_types = ['username', 'password']
+        possible_types = ['username', "image",'password',]
         if type_ in possible_types:
             if type_ == possible_types[0]:
                 self.setting = "username"
                 if len(self.ids.settings_layout.children) > 0:
                     self.ids.settings_layout.clear_widgets()
-                    self.ids.settings_layout.add_widget(UserNameSettingsLabel())
-                    self.ids.settings_layout.add_widget(UserNameTextInput())
-                    self.ids.settings_layout.add_widget(self.relative_layout)
-                else:
-                    self.ids.settings_layout.add_widget(UserNameSettingsLabel())
-                    self.ids.settings_layout.add_widget(UserNameTextInput())
-                    self.ids.settings_layout.add_widget(self.relative_layout)
+                if self.crop_button in self.relative_layout.children:
+                    self.relative_layout.remove_widget(self.crop_button)
+                self.ids.settings_layout.add_widget(UserNameSettingsLabel())
+                self.ids.settings_layout.add_widget(UserNameTextInput())
+                self.ids.settings_layout.add_widget(self.relative_layout)
 
             elif type_ == possible_types[-1]:
                 self.setting = "password"
                 if len(self.ids.settings_layout.children) > 0:
                     self.ids.settings_layout.clear_widgets()
-                    self.ids.settings_layout.add_widget(ChangePasswordLabel())
-                    self.ids.settings_layout.add_widget(PasswordTextInput())
-                    self.ids.settings_layout.add_widget(self.relative_layout)
-                else:
-                    self.ids.settings_layout.add_widget(ChangePasswordLabel())
-                    self.ids.settings_layout.add_widget(PasswordTextInput())
-                    self.ids.settings_layout.add_widget(self.relative_layout)
+                if self.crop_button in self.relative_layout.children:
+                    self.relative_layout.remove_widget(self.crop_button)
+
+
+                self.ids.settings_layout.add_widget(ChangePasswordLabel())
+                self.ids.settings_layout.add_widget(PasswordTextInput())
+                self.ids.settings_layout.add_widget(self.relative_layout)
+            else:
+                self.setting = "image"
+                if len(self.ids.settings_layout.children) > 0:
+                    self.ids.settings_layout.clear_widgets()
+                if not self.crop_button in self.relative_layout.children:
+                    self.relative_layout.add_widget(self.crop_button) 
+
+                self.ids.settings_layout.add_widget(ChangeProfilePictureLabel())
+                self.ids.settings_layout.add_widget(self.image_widget)
+                self.ids.settings_layout.add_widget(self.relative_layout)
 
 
 
@@ -521,7 +565,7 @@ class ChatVortex(MDApp):
 
     # Callback function to handle changes in chat_state
     def on_chat_state(self, instance, value):
-        print("chat_state changed:", value)
+       pass
       
 
 async def main():

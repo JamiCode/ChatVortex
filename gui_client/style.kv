@@ -8,7 +8,6 @@
 #:import ProfileImageCropper src.profile_image_cropper.ProfileImageCropper
 
 
-
 <MyButton@Button>:
     font_size: '16sp'
     size_hint_y: None
@@ -285,6 +284,12 @@
                             text:'Change Password'
                             on_release:root.setEdit('password')
                             size_hint_x:None
+                        MDFillRoundFlatIconButton:
+                            text:"Change Profile Picture"
+                            md_bg_color:app.THEME["primary"]
+                            icon:'camera-front-variant'
+                            size_hint_x:None
+                            on_release:root.setEdit("image")
                         Label:
                             text: 'Appearance'
                             font_size: '18sp'
@@ -298,18 +303,21 @@
                         MyButton:
                             text: 'Font Size'
                             
-            BoxLayout:
-                orientation: 'vertical'
-                size_hint_x: 0.7
-                
-                
-                ScrollView:
-                    BoxLayout:
-                        id:settings_layout
-                        orientation: 'vertical'
-                        # size_hint_y: None
-                        # height: self.minimum_height
-                        padding: dp(16)
+            MDBoxLayout:
+                orientation:'vertical'
+                padding:dp(30)
+                MDBoxLayout:
+                    id:settings_layout
+                    orientation: 'vertical'
+                    size_hint_x: 1
+                    padding: dp(25)
+                    
+                CircularProfileImage:
+                    id: circle_preview
+                    size_hint: None, 0.35
+                    width: self.height
+                    pos_hint: {'center_x': 0.75, 'center_y': 0.75}
+                    source: 'missing_profile_image.png'
 
 
 <SplashScreen>:

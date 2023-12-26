@@ -325,6 +325,7 @@ async def check_update_conversation(conversations, user):
     return False
 
 
+User
 async def get_chat_history(conversation_id:int, onInitial=None, group=False):
     conversation =  models.Conversation.get_or_none(Conversation.conversation_id == conversation_id)
 
@@ -350,6 +351,8 @@ async def get_chat_history(conversation_id:int, onInitial=None, group=False):
             return {"action":"initial_chat_history", "data":
             list(messages)}
         return {"action":"update_chat_history", "data":list(messages)}
+
+
 
 
 async def leave_group(group_id:int, user_id):
@@ -417,7 +420,6 @@ async def add_members_to_group(request):
 
 
 
-
 async def get_group_members(group_id):
     try:
         # Retrieve the group based on the group_id
@@ -430,9 +432,21 @@ async def get_group_members(group_id):
         members = (User
                    .select()
                    .join(ConversationParticipant, on=(User.user_id == ConversationParticipant.participant_id))
-                   .where(ConversationParticipant.conversation_id == conversation.conversation_id))
-        print(members)
-        return list(members)
+                   .where(ConversationParticipant.conversation_id == conversation.conversation_id)) 
+
+        # Convert user data to dictionaries and handle profile pictures
+        members_list = []
+        for member in members:
+            member_dict = member.__dict__["__data__"]
+            if 'profile_picture' in member_dict and isinstance(member_dict['profile_picture'], bytes):
+                member_dict['profile_picture'] = base64.b64encode(member_dict['profile_picture']).decode('utf-8')
+            
+            # Exclude the hashed_password field from the dictionary
+            member_dict.pop('hashed_password', None)
+            
+            members_list.append(member_dict)
+        
+        return members_list
 
     except Group.DoesNotExist:
         print(f"Group with ID {group_id} does not exist.")
